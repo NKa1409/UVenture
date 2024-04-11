@@ -948,7 +948,7 @@ class OneAnalysis:
             
             
 if __name__ == "__main__":
-    mzml_filename = "F12_HRAIF4_3.mzML"
+    mzml_filename = "C://Users//Admin//Desktop//UVenture//Evaluation_folder//F12_HRAIF4_3.mzML"
 
     ms_file = MS_File(mzml_filename)
     #myspec = Spec(ms_file, 400, requested_filter_mode="Full scan", save_plot=True, unique_spec_folder="test/")
