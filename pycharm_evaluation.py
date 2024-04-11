@@ -382,8 +382,7 @@ def get_spectra_associated_with_mass(f, mass, mass_deviation=0.005,
 
     bg_subst_int = do_bg_substraction(xic[1], approx_capture_duration_per_element, sg_windows=sg_windows_bg_removal,
                                       width=width_bg_removal,
-                                      distance=((
-                                                        min_distance_of_chromatographic_peaks_in_seconds / approx_capture_duration_per_element) + 1))
+                                      distance=((min_distance_of_chromatographic_peaks_in_seconds / approx_capture_duration_per_element) + 1))
 
     peaks = scipy.signal.find_peaks(bg_subst_int[0],
                                     height=max(bg_subst_int[0]) * min_relative_height_for_peak_detection,
