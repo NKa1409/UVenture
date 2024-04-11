@@ -129,7 +129,7 @@ class Spec:
         self.make_spec_log_entry("INFO:\t" + "Requested filter mode: " + str(self.kwargs["requested_filter_mode"]))
         if self.kwargs["requested_filter_mode"] == "MS/MS":
             self.make_spec_log_entry("INFO:\t" + "Requested MS/MS mass: " + str(self.kwargs["requested_ms_ms_mass"]))
-        self.make_spec_log_entry("INFO:\t" + "Saving plot?: " + str(self.kwargs["save_plot"]))
+        self.make_spec_log_entry("INFO:\t" + "Saving plot?: " + str(self.kwargs["save_spec_matplotlib_plot"]))
 
         print("Getting mass spec...")
         self.mass_intensity_dict = self.get_mass_spec(self.index, requested_mode=self.kwargs["requested_filter_mode"], requested_ms_ms_mass=self.kwargs["requested_ms_ms_mass"])
@@ -497,7 +497,7 @@ class Prediction:
         self.mass = min(list(spec.summarized_mass_intensity_dict.keys()), key=lambda x: abs(mass - x))
         self.spec = spec
         self.rt = self.spec.rt
-        self.formulas_score_dict = {}
+        self.formula_score_dict = {}
         self.best_formula_prediction = None
         self.score_of_best_formula = None
         self.intensity_of_ion = None
@@ -532,7 +532,8 @@ class Prediction:
                           "stop_isotopologue_search_if_score_lower_than":-80,
                           "ppm_deviation_score_multiplier":14,
                           "include_likelyhood_of_formula":True,
-                          "reject_formula_if_score_lower_than":10 }
+                          "reject_formula_if_score_lower_than":10,
+                          "return_if_no_peak_is_found_in_prediction": True }
         self.kwargs = {**default_kwargs, **kwargs}
         os.makedirs(self.kwargs["pred_folder"], exist_ok=True)
 
@@ -544,6 +545,21 @@ class Prediction:
         self.make_op_log_entry("INFO:\t" + "Creating prediction object for mass: " + str(self.mass) + " at retention time: " + str(self.rt) + " at index: " + str(self.spec.index))    
         self.make_op_log_entry("INFO:\t" + "Intensity of the molecular ion: " + str(self.intensity_of_ion))
         self.make_op_log_entry("INFO:\t" + "Assuming a mass deviation of: " + str(self.kwargs["mass_deviation"]))
+
+        self.xic = MS_functions.get_xic(self.ms_file.rawdata, self.mass, ((self.kwargs["mass_deviation"]*self.mass)/1000000), requested_filter_mode=self.spec.filter_mode)
+        self.identified_peaks_for_mass = self.get_peak_properties(self.xic[0], self.xic[1])
+        self.prediction_spec_within_peak_range = self.check_if_provided_spectrum_within_peak_range(self.spec.index, self.identified_peaks_for_mass)
+        if not self.prediction_spec_within_peak_range:
+            self.make_op_log_entry("WARNING:\t" + "No peak is detected where a prediction should be made!")
+            self.make_op_log_entry("WARNING:\t" + "RT: " + str(self.spec.rt) + " Index: " + str(self.spec.index) + " Mass: " + str(self.mass))
+            print("No peak is detected where a prediction should be made!")
+            print("Looking at peak: RT: " + str(self.spec.rt) + " Index: " + str(self.spec.index) + " Mass: " + str(self.mass))
+            if self.kwargs["return_if_no_peak_is_found_in_prediction"]:
+                print("Returning...")
+                self.make_op_log_entry("Returning...")
+                return
+            print("However, the program will continue...")
+            self.make_op_log_entry("However, the program will continue...")
 
         _, possible_formulas = MS_functions.get_formula_from_cache(self.kwargs["formula_cache_folder_path"], self.mass, self.kwargs["mass_deviation"])
         if self.kwargs["charge_of_measured_mass"] < 0:
@@ -569,7 +585,7 @@ class Prediction:
                 self.make_op_log_entry("OUTPUT OF FORMULA PREDICTION WITH MASS SPECTRUM (ISOTOPOLOGUES)")
                 self.make_op_log_entry("Mass of ion: " + str(self.mass))
                 self.make_op_log_entry("PPM DEVIATION OF MOLECULE FORMULA: " + str(round(entry[1], 2)))
-                self.make_op_log_entry("{:>25} \t {:>25} \t {:>25} \t {:>25} \t {:>25} \n".format("Mass_of_isotopologue", "Isotopo_found?", "measured_intensity", "required_intensity", "score_of_isotopologue"))
+                self.make_op_log_entry("{:>25} \t {:>25} \t {:>25} \t {:>25} \t {:>25}".format("Mass_of_isotopologue", "Isotopo_found?", "measured_intensity", "required_intensity", "score_of_isotopologue"))
                 for item in list(isotope_check.items()):
                     try:
                         self.make_op_log_entry("{:>25} \t {:>25} \t {:>25} \t {:>25} \t {:>25}".format(str(round(item[0], 4)), str(item[1][0]), str(round(item[1][2], 4)), str(round(item[1][1], 4)), str(round(item[1][3], 4))))
@@ -587,8 +603,6 @@ class Prediction:
         for item in list(self.formula_score_dict.items()):
             self.make_op_log_entry("{:>30} \t {:>20}".format(str(item[0]), str(round(item[1], 2))))
 
-        self.xic = MS_functions.get_xic(self.ms_file.rawdata, self.mass, ((self.kwargs["mass_deviation"]*self.mass)/1000000), requested_filter_mode=self.spec.filter_mode)
-        self.identified_peaks_for_mass = self.get_peak_properties(self.xic[0], self.xic[1])
         if self.kwargs["save_xic_plot_prediction"] == True:
             self.xic_plot_filepath = self.kwargs["pred_folder"] + "xic_" + str(round(self.mass, 4)) + "+-" + str(self.kwargs["mass_deviation"]) + "_" + str( self.spec.filter_mode) + ".png"
             self.save_xic_plot(self.xic[0], self.xic[1], self.xic_plot_filepath)
@@ -598,6 +612,12 @@ class Prediction:
         if self.kwargs["save_go_plot_of_isotopologues_prediction"] == True and len(list(self.formula_score_dict.keys())) > 0:
             self.go_plot_filepath = self.kwargs["pred_folder"] + "isotopo_go_plot_" + str(round(self.mass, 4)) + "_" + str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.formula_score_dict.keys())[0]).items()])) + ".html"
             self.make_go_plot_of_isotopologues(ast.literal_eval(list(self.formula_score_dict.keys())[0]), self.go_plot_filepath)
+
+    def check_if_provided_spectrum_within_peak_range(self, index, peak_properties):
+        for peak in peak_properties:
+            if (self.ms_file.rt_list[index] >= peak[2]) and (self.ms_file.rt_list[index] <= peak[3]):
+                return True
+        return False
 
     def add_likelyhood_of_formula_to_score(self, formula_score_dict):
         #formula score dict given in the form of {"{'C': 2, 'H': 4, 'O': 1}": 100, "{'C': 3, 'H': 6, 'O': 1}": 200, ...}
@@ -636,7 +656,6 @@ class Prediction:
         intensities = scipy.signal.savgol_filter(intensities, window, order, mode="nearest")
         print(len(intensities))
         peak_properties = scipy.signal.find_peaks(intensities, height=max(intensities)/100, distance=2, prominence=max(intensities)/50, width=(2, 20))
-        print(peak_properties)
         identified_peaks = []
         for element in range(len(peak_properties[1]["peak_heights"])):
             one_peak = []
@@ -794,6 +813,9 @@ class Prediction:
             ax[entry].set_title(str(round(list(isotope_simulation.keys())[entry], 4)), rotation='vertical')
         for a in fig.get_axes():
             a.label_outer()
+        #set the title of the whole figure so that it will be displayed above the subplots
+        fig.suptitle("Isotopologues Plot for Formula: " + str(formula_to_simulate) + 
+                     "\n At RT: " + str(round(self.spec.rt, 2)) + " and Mass: " + str(round(self.mass, 4)))
         plt.legend()
         matplotlib.rcParams.update({'figure.autolayout': True})
         plt.savefig(filepath, bbox_inches='tight', dpi=1000)
@@ -832,7 +854,9 @@ class OneAnalysis:
                           "oa_log_filepath":str(self.ms_file.parentfolder + "/" + str(self.mass) + "_" + str(self.rt) + "/" + "oa_log.txt"),
                           "charge_of_measured_mass":-1,
                           "formula_cache_folder_path":"C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//",
-                          "include_frag_intensity_noise_multiplier":0.01}
+                          "include_frag_intensity_noise_multiplier":0.01,
+                          "reject_formula_if_score_lower_than": 10,
+                          "oa_only_calc_prediction_if_peak_is_found":True }
         self.kwargs = {**default_kwargs, **kwargs}
         os.makedirs(self.kwargs["one_analysis_folder"], exist_ok=True)
 
@@ -913,8 +937,6 @@ class OneAnalysis:
         self.make_oa_log_entry("INFO:\t" + "Finished creating summary list of one analysis...")
         self.make_oa_log_entry("INFO:\t" + "Summary list of one analysis: " + str(self.summary_list_of_one_analysis))
 
-
-
     def make_true_fragment_list(self):
         true_fragment_list = []
         
@@ -948,13 +970,6 @@ class OneAnalysis:
                     break
         return true_fragment_list
         
-            
-            
-
-
-
-        
-        
     def adjust_mass_to_closest_measured_mass(self, spec, masse=0):
         if masse == 0:
             masse = self.mass
@@ -969,13 +984,15 @@ class OneAnalysis:
         self.molecular_ion_prediction = Prediction(self.ms_file, self.mass, self.full_scan_spec, 
                                                    absolute_pred_folder=self.kwargs["one_analysis_folder"] + "predictions/",
                                                    formula_cache_folder_path=self.kwargs["formula_cache_folder_path"],
-                                                   save_plot_of_isotopologues=True,
-                                                   save_xic_plot=True)
+                                                   save_matplotlib_plot_of_isotopologues_prediction=True,
+                                                   save_go_plot_of_isotopologues_prediction=True,
+                                                   save_xic_plot_prediction=True,
+                                                   save_detailed_prediction_log=True)
         available_specs.append(self.full_scan_spec)
         #try to get the two full scan spectra next to the provided spectrum
         try:
             spec_before = Spec(self.ms_file, 
-                               self.peak_index - 1, 
+                               self.peak_index - len(self.ms_file.available_modes), 
                                requested_filter_mode="Full scan", 
                                absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/", 
                                mass_deviation=self.kwargs["mass_deviation"],
@@ -986,12 +1003,11 @@ class OneAnalysis:
             available_specs.append(spec_before)
         except Exception as e:
             spec_before = None
-            prediction_before = None
             print("Error in getting spectrum & prediction before the actual analyzed spectrum: " + str(e))
             print(traceback.format_exc())
         try:
             spec_after = Spec(self.ms_file, 
-                              self.peak_index + 1, 
+                              self.peak_index + len(self.ms_file.available_modes), 
                               requested_filter_mode="Full scan", 
                               absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/", 
                               mass_deviation=self.kwargs["mass_deviation"],
@@ -1002,7 +1018,6 @@ class OneAnalysis:
             available_specs.append(spec_after)
         except Exception as e:
             spec_after = None
-            prediction_after = None
             print("Error in getting spectrum & prediction after the actual analyzed spectrum: " + str(e))
             print(traceback.format_exc())
         
@@ -1014,9 +1029,19 @@ class OneAnalysis:
         self.make_oa_log_entry("INFO:\t" + "Summarized formula score dict: " + str(self.summarized_molecular_ion_formula_score_dict))
         print("Summarized formula score dict: " + str(self.summarized_molecular_ion_formula_score_dict))
 
-        self.best_molecular_ion_prediction = str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.summarized_molecular_ion_formula_score_dict.keys())[0]).items()]))  
-        self.score_of_best_molecular_ion_prediction = list(self.summarized_molecular_ion_formula_score_dict.values())[0]
-
+        try:
+            self.best_molecular_ion_prediction = str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.summarized_molecular_ion_formula_score_dict.keys())[0]).items()]))  
+            self.score_of_best_molecular_ion_prediction = list(self.summarized_molecular_ion_formula_score_dict.values())[0]
+        except Exception as e:
+            self.best_molecular_ion_prediction = "No formula found"
+            print("Error in getting best molecular ion prediction: " + str(e))
+            print(traceback.format_exc())
+            self.score_of_best_molecular_ion_prediction = 0
+        self.molecular_ion_prediction.make_op_log_entry("=============================================================")
+        self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Best formula prediction: " + str(self.best_molecular_ion_prediction) + " Score: " + str(self.score_of_best_molecular_ion_prediction))
+        self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Summarized formula score dict: " + str(self.summarized_molecular_ion_formula_score_dict))
+        self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Formula predicted with " + str(len(available_specs)) + " spectra.")
+        self.molecular_ion_prediction.make_op_log_entry("=============================================================")
         return self.molecular_ion_prediction
     
     def get_formula_score_dict_with_multiple_specs(self, specs, mass):
@@ -1026,21 +1051,23 @@ class OneAnalysis:
                 pred = Prediction(self.ms_file, mass, spec,
                                   absolute_pred_folder=self.kwargs["one_analysis_folder"] + "predictions/",
                                   formula_cache_folder_path=self.kwargs["formula_cache_folder_path"],
+                                  save_matplotlib_plot_of_isotopologues_prediction=False,
+                                  save_go_plot_of_isotopologues_prediction=False,
                                   save_xic_plot_prediction=False,
                                   save_detailed_prediction_log=False,
-                                  save_matplotlib_plot_of_isotopologues_prediction=False,
-                                  save_go_plot_of_isotopologues_prediction=False)
+                                  return_if_no_peak_is_found_in_prediction=False)
                 predictions.append(pred)
             except Exception as e:
                 predictions.append(None)
                 print("Error in getting prediction with multiple specs: " + str(e))
                 print(traceback.format_exc())
                 continue
+        print(predictions)
         summarized_formula_score_dict = {}
         for pred in predictions:
             if pred is not None:
                 summarized_formula_score_dict = self.combine_and_sum_dicts(summarized_formula_score_dict, pred.formula_score_dict)
-                print("Formula score dict after adding prediction: " + str(self.summarized_molecular_ion_formula_score_dict))
+                print("Formula score dict after adding prediction: " + str(summarized_formula_score_dict))
         summarized_formula_score_dict = {f: s for f, s in summarized_formula_score_dict.items() if s > self.kwargs["reject_formula_if_score_lower_than"]}
         summarized_formula_score_dict = dict(sorted(summarized_formula_score_dict.items(), key=lambda x: x[1], reverse=True))
         return summarized_formula_score_dict
@@ -1053,17 +1080,24 @@ class OneAnalysis:
         self.fragment_predictions = {}
         self.fragment_predictions_formula_score_dicts = {}
         for frag_mass in self.possible_fragment_masses:
-            self.fragment_predictions[frag_mass] = Prediction(self.ms_file, frag_mass, self.aif_spec, 
+            curr_prediction = Prediction(self.ms_file, frag_mass, self.aif_spec, 
                                                               absolute_pred_folder=self.kwargs["one_analysis_folder"] + "predictions/fragments/",
                                                               formula_cache_folder_path=self.kwargs["formula_cache_folder_path"],
-                                                              save_plot_of_isotopologues=True,
-                                                              save_xic_plot=True)
+                                                              save_matplotlib_plot_of_isotopologues_prediction=True,
+                                                              save_go_plot_of_isotopologues_prediction=True,
+                                                              save_xic_plot_prediction=True,
+                                                              save_detailed_prediction_log=True,
+                                                              return_if_no_peak_is_found_in_prediction=self.kwargs["oa_only_calc_prediction_if_peak_is_found"])
+            if not curr_prediction.prediction_spec_within_peak_range and \
+                self.kwargs["oa_only_calc_prediction_if_peak_is_found"] == True:
+                continue
+            self.fragment_predictions[frag_mass] = curr_prediction
             if make_good_fragment_formula_prediction:
                 available_specs = []
                 available_specs.append(self.aif_spec)
                 try:
                     spec_before = Spec(self.ms_file, 
-                                       self.peak_index - 1, 
+                                       self.peak_index - len(self.ms_file.available_modes), 
                                        requested_filter_mode="AIF", 
                                        absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/", 
                                        mass_deviation=self.kwargs["mass_deviation"],
@@ -1079,7 +1113,7 @@ class OneAnalysis:
                     print(traceback.format_exc())
                 try:
                     spec_after = Spec(self.ms_file, 
-                                      self.peak_index + 1, 
+                                      self.peak_index + len(self.ms_file.available_modes), 
                                       requested_filter_mode="AIF", 
                                       absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/", 
                                       mass_deviation=self.kwargs["mass_deviation"],
@@ -1097,10 +1131,8 @@ class OneAnalysis:
             else:
                 self.fragment_predictions_formula_score_dicts[frag_mass] = self.fragment_predictions[frag_mass].formula_score_dict
             plt.close("all")
-            self.make_oa_log_entry("INFO:\t" + "Finished prediction of fragment ion with mass: " + str(frag_mass) + " Best formula prediction: " + str(self.fragment_predictions[frag_mass].best_formula_prediction) + " Score: " + str(self.fragment_predictions[frag_mass].score_of_best_formula_prediction))
+            self.make_oa_log_entry("INFO:\t" + "Finished prediction of fragment ion with mass: " + str(frag_mass) + " Best formula prediction: " + str(self.fragment_predictions[frag_mass].best_formula_prediction) + " Score: " + str(self.fragment_predictions[frag_mass].score_of_best_formula))
         return self.fragment_predictions, self.fragment_predictions_formula_score_dicts
-
-        
 
     def plot_and_save_xic(self, save_filepath, peak_index, xic):
         fig, ax = plt.subplots()
