@@ -42,6 +42,7 @@ class MS_File:
         self.all_filters = []
         self.method_duration = None
         self.available_modes = []
+        self.all_modes = []
         self.tic = []
         self.open_mzml_file()
         self.rt_list = [element["scanList"]["scan"][0]["scan time"] for element in self.rawdata]
@@ -60,7 +61,8 @@ class MS_File:
         for index in range(len(self.rawdata)):
             masses = list(self.rawdata[index]["m/z array"])
             intensities = list(self.rawdata[index]["intensity array"])
-            self.all_ms_spectra.append({"masses":masses, "intensities":intensities})
+            mass_intensity_dict = dict(zip(masses, intensities))
+            self.all_ms_spectra.append(mass_intensity_dict)
             self.tic.append(self.rawdata[index]["total ion current"])
             self.all_filters.append(self.rawdata[index]["scanList"]["scan"][0]["filter string"])
         for filter_string in self.all_filters:
@@ -70,6 +72,7 @@ class MS_File:
                 self.available_modes.append("Full scan")
             elif " d " not in filter_string and "hcd" in filter_string:
                 self.available_modes.append("AIF")
+        self.all_modes = self.available_modes
         self.available_modes = list(set(self.available_modes))
         self.method_duration = self.rawdata[-1]["scanList"]["scan"][0]["scan time"]
         return self
@@ -961,8 +964,12 @@ class OneAnalysis:
                 f_formula = ast.literal_eval(f_formula)
                 for nl_formula in list(neutral_loss_formula_predictions.keys()):
                     nl_deviation = neutral_loss_formula_predictions[nl_formula]
-                    nl_formula = ast.literal_eval(nl_formula)
+                    nl_formula = MS_functions.get_formula_to_dict(nl_formula)
+                    print(nl_formula)
+                    print(f_formula)
+                    print(molecular_ion_best_approx_dict)
                     if (self.combine_and_sum_dicts(nl_formula, f_formula) == molecular_ion_best_approx_dict):
+                        print("TRUETRUETRUEskjaskjhlgfaivwzbevwuief")
                         true_fragment_list.append([f_mass, f_formula, f_score, f_intensity, neutral_loss_mass, nl_formula, nl_deviation])
                         found_pair = True
                         break
@@ -1022,7 +1029,7 @@ class OneAnalysis:
             print(traceback.format_exc())
         
         #add the scores of all the available prediction formula_score_dicts and create a summarized formula_score_dict
-        self.summarized_molecular_ion_formula_score_dict = self.get_formula_score_dict_with_multiple_specs(available_specs, self.mass)
+        self.summarized_molecular_ion_formula_score_dict, all_formula_score_dicts = self.get_formula_score_dict_with_multiple_specs(available_specs, self.mass)
         
         self.summarized_molecular_ion_formula_score_dict = {f: s for f, s in self.summarized_molecular_ion_formula_score_dict.items() if s > self.kwargs["reject_formula_if_score_lower_than"]}
         self.summarized_molecular_ion_formula_score_dict = dict(sorted(self.summarized_molecular_ion_formula_score_dict.items(), key=lambda x: x[1], reverse=True))
@@ -1038,9 +1045,12 @@ class OneAnalysis:
             print(traceback.format_exc())
             self.score_of_best_molecular_ion_prediction = 0
         self.molecular_ion_prediction.make_op_log_entry("=============================================================")
+        self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Formula predicted with " + str(len(available_specs)) + " spectra.")
+        self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "All formula score dicts: ")
+        for i, f_score_dict in enumerate(all_formula_score_dicts):
+            self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Formula score dict " + str(i) + ": " + str(f_score_dict))
         self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Best formula prediction: " + str(self.best_molecular_ion_prediction) + " Score: " + str(self.score_of_best_molecular_ion_prediction))
         self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Summarized formula score dict: " + str(self.summarized_molecular_ion_formula_score_dict))
-        self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Formula predicted with " + str(len(available_specs)) + " spectra.")
         self.molecular_ion_prediction.make_op_log_entry("=============================================================")
         return self.molecular_ion_prediction
     
@@ -1070,7 +1080,8 @@ class OneAnalysis:
                 print("Formula score dict after adding prediction: " + str(summarized_formula_score_dict))
         summarized_formula_score_dict = {f: s for f, s in summarized_formula_score_dict.items() if s > self.kwargs["reject_formula_if_score_lower_than"]}
         summarized_formula_score_dict = dict(sorted(summarized_formula_score_dict.items(), key=lambda x: x[1], reverse=True))
-        return summarized_formula_score_dict
+        all_formula_score_dicts = [pred.formula_score_dict for pred in predictions if pred is not None]
+        return summarized_formula_score_dict, all_formula_score_dicts
         
     def get_fragment_predictions(self, make_good_fragment_formula_prediction=False):
         print("Starting prediction of fragment ions...")
@@ -1127,7 +1138,7 @@ class OneAnalysis:
                     prediction_after = None
                     print("Error in getting spectrum & prediction after the actual analyzed spectrum: " + str(e))
                     print(traceback.format_exc())
-                self.fragment_predictions_formula_score_dicts[frag_mass] = self.get_formula_score_dict_with_multiple_specs(available_specs, frag_mass)
+                self.fragment_predictions_formula_score_dicts[frag_mass], all_formula_score_dicts = self.get_formula_score_dict_with_multiple_specs(available_specs, frag_mass)
             else:
                 self.fragment_predictions_formula_score_dicts[frag_mass] = self.fragment_predictions[frag_mass].formula_score_dict
             plt.close("all")
@@ -1163,9 +1174,194 @@ class OneAnalysis:
         return True
 
 
+class PeakFinding:
+    def __init__(self, ms_file, **kwargs):
+        self.ms_file = ms_file
+        self.peak_properties_list = []
 
 
-        
+
+        default_kwargs = {"mass_deviation":11,
+                          "minimum_required_max_intensity":100000,
+                          "minimum_peak_width_seconds":0.1,
+                          "maximum_peak_width_seconds":10,
+                          "minimum_peak_prominence":50000,
+                          "peak_finding_log_filepath":str(self.ms_file.parentfolder + "/" + "peak_finding_log.txt"),
+                          "round_for_masses_summary": 4 }
+        self.kwargs = {**default_kwargs, **kwargs}
+        os.makedirs(self.kwargs["peak_finding_log_filepath"], exist_ok=True)
+
+        print("Starting peak finding...")
+        ordered_mass_intensity_dict = self.get_all_available_masses_in_list()
+        print("Finished getting all available masses in list!")
+        print(ordered_mass_intensity_dict)
+
+        while len(ordered_mass_intensity_dict) > 0:
+            curr_mass = list(ordered_mass_intensity_dict.keys())[0]
+            mass_evaluation = self.search_peaks_for_mass(curr_mass)
+            print(mass_evaluation)
+            for peak in mass_evaluation:
+                self.peak_properties_list.append(peak)
+            del ordered_mass_intensity_dict[curr_mass]
+        print("Finished peak finding!")
+        self.peak_properties_list = sorted([peak for peak in self.peak_properties_list], key=lambda x: x[2])
+        print("Peak properties list: " + str(self.peak_properties_list))
+
+    def search_peaks_for_mass(self, mass):
+        print("Evaluating peak for mass: " + str(mass))
+        xic = MS_functions.get_xic(self.ms_file.rawdata, mass, ((self.kwargs["mass_deviation"]*mass)/1000000), requested_filter_mode="Full scan")
+        times = xic[0]
+        intensities = xic[1]
+        window, order = 5, 3
+        intensities = scipy.signal.savgol_filter(intensities, window, order, mode="nearest")
+        peak_properties = scipy.signal.find_peaks(intensities, height=max(intensities)/100, distance=2, prominence=max(intensities)/50, width=(2, 20))
+        identified_peaks = []
+        for element in range(len(peak_properties[1]["peak_heights"])):
+            if peak_properties[1]["peak_heights"][element] < self.kwargs["minimum_required_max_intensity"] or \
+                peak_properties[1]["prominences"][element] < self.kwargs["minimum_peak_prominence"]:
+                continue
+            one_peak = []
+            one_peak.append(mass)
+            one_peak.append(times[int(peak_properties[1]["left_ips"][element] + (peak_properties[1]["widths"][element]/2))])
+            one_peak.append(peak_properties[1]["peak_heights"][element])
+            one_peak.append(times[int(peak_properties[1]["right_ips"][element])] - times[int(peak_properties[1]["left_ips"][element])])
+            one_peak.append(peak_properties[1]["prominences"][element])
+            identified_peaks.append(one_peak)
+        #[[mass, time, height, duration, prominence], [....], ...]
+        return identified_peaks
+
+    def combine_and_sum_dicts(self, dict1, dict2):
+        return {k: dict1.get(k, 0) + dict2.get(k, 0) for k in set(dict1) | set(dict2)}
+
+    def get_best_approx_for_ppm_spacing_within_peak(self, mass_list, worst_expected_ppm_deviation=20):
+        mass_list = sorted(mass_list)
+        ppm_spacing_list = [(((mass_list[i+1] - mass_list[i]) / mass_list[i]) * 1000000) for i in range(len(mass_list)-1)]
+        ppm_spacing_list = [ppm for ppm in ppm_spacing_list if ppm < worst_expected_ppm_deviation]
+        avg_ppm = sum(ppm_spacing_list) / len(ppm_spacing_list)
+        return avg_ppm
+
+    def summarize_mass_intensity_dict_with_deviation(self, dictio, deviation=11):
+        print("=============================================================")
+        print("=============================================================")
+        start_time = datetime.datetime.now()
+        print("Start time: " + str(datetime.datetime.now()))
+        print("summarizing dict according to new method")
+        dictio = {k: v for k, v in dictio.items() if v >= 1}
+        #sort the dictio by its keys
+        dictio = dict(sorted(dictio.items(), key=lambda item: item[0]))
+        print("old length of start dictio:")
+        print(len(dictio))
+
+        old_masses_list = list(dictio.keys())
+        old_abundances_list = list(dictio.values())
+        new_masses_list = []
+        new_abundances_list = []
+
+        best_approx_ppm_spacing_within_peak = self.get_best_approx_for_ppm_spacing_within_peak(old_masses_list)
+        print("best approx for ppm spacing within peak: " + str(best_approx_ppm_spacing_within_peak))
+
+        while len(old_masses_list) > 0:
+            try:
+                remove_all_lower = False
+                remove_all_upper = False
+                index_of_highest_abundance = old_abundances_list.index(max(old_abundances_list))
+                curr_mass = old_masses_list[index_of_highest_abundance]
+                mass_lower_border = curr_mass - ((deviation*curr_mass)/1000000)
+                mass_upper_border = curr_mass + ((deviation*curr_mass)/1000000)
+                iteration_step_lower = 0
+                integration_step_upper = 0
+                last_existing_mass_within_border = curr_mass
+                last_abundance = old_abundances_list[index_of_highest_abundance]
+                expected_min_spacing_between_measurement_points = (best_approx_ppm_spacing_within_peak * curr_mass) / 1000000
+                try:
+                    while (mass_lower_border < old_masses_list[index_of_highest_abundance-iteration_step_lower]) and \
+                            (last_existing_mass_within_border - old_masses_list[index_of_highest_abundance-iteration_step_lower] <= 2.2*expected_min_spacing_between_measurement_points) and \
+                                (old_abundances_list[index_of_highest_abundance-iteration_step_lower] <= (1.1 * last_abundance)):
+                        last_existing_mass_within_border = old_masses_list[index_of_highest_abundance-iteration_step_lower]
+                        last_abundance = old_abundances_list[index_of_highest_abundance-iteration_step_lower]
+                        iteration_step_lower += 1
+                except IndexError:
+                    remove_all_lower = True
+                    iteration_step_lower = 0
+                last_existing_mass_within_border = curr_mass
+                last_abundance = old_abundances_list[index_of_highest_abundance]
+                try:
+                    while (mass_upper_border > old_masses_list[index_of_highest_abundance+integration_step_upper]) and \
+                            (old_masses_list[index_of_highest_abundance+integration_step_upper] - last_existing_mass_within_border <= 2.2*expected_min_spacing_between_measurement_points) and \
+                                (old_abundances_list[index_of_highest_abundance+integration_step_upper] <= (1.1 * last_abundance)):
+                        last_existing_mass_within_border = old_masses_list[index_of_highest_abundance+integration_step_upper]
+                        last_abundance = old_abundances_list[index_of_highest_abundance+integration_step_upper]
+                        integration_step_upper += 1
+                except IndexError:
+                    remove_all_upper = True
+                    integration_step_upper = 0
+                
+                if remove_all_lower == True and remove_all_upper == True:
+                    break
+                if remove_all_upper:
+                    summed_intensity = sum([old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, len(old_abundances_list), 1)])
+                    weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, len(old_abundances_list), 1)]) / summed_intensity
+                    new_masses_list.append(weighted_mass_average)
+                    new_abundances_list.append(summed_intensity)
+                    old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, len(old_masses_list), 1)]
+                    old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, len(old_abundances_list), 1)]
+                    continue
+                if remove_all_lower:
+                    summed_intensity = sum([old_abundances_list[i] for i in range(0, index_of_highest_abundance+integration_step_upper, 1)])
+                    weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(0, index_of_highest_abundance+integration_step_upper, 1)]) / summed_intensity
+                    new_masses_list.append(weighted_mass_average)
+                    new_abundances_list.append(summed_intensity)
+                    old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(0, index_of_highest_abundance+integration_step_upper, 1)]
+                    old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(0, index_of_highest_abundance+integration_step_upper, 1)]
+                    continue
+                    
+                summed_intensity = sum([old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper, 1)])
+                weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper, 1)]) / summed_intensity
+                new_masses_list.append(weighted_mass_average)
+                new_abundances_list.append(summed_intensity)
+                old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper, 1)]
+                old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper, 1)]
+            except Exception as e:
+                print("EXCEPTION IN summarize_mass_intensity_dict_with_deviation()!!!")
+                print(traceback.format_exc())
+                print(e)
+                break
+        outdict = dict(zip(new_masses_list, new_abundances_list))
+        print("new length of summarized dictio:")
+        print(len(outdict))
+        print("End time: " + str(datetime.datetime.now()))
+        print("Time taken = " + str(datetime.datetime.now() - start_time))
+        return outdict
+
+    def get_all_available_masses_in_list(self):
+        ordered_mass_intensity_dict = {}
+        for entry in self.ms_file.all_ms_spectra:
+            if not self.ms_file.all_modes[self.ms_file.all_ms_spectra.index(entry)] == "Full scan":
+                continue
+            if self.ms_file.all_ms_spectra.index(entry) > 300:
+                break
+            print(str(self.ms_file.all_ms_spectra.index(entry)) + " / " + str(len(self.ms_file.all_ms_spectra)))
+            curr_save = entry
+            curr_save = {round(key, self.kwargs["round_for_masses_summary"]): value for key, value in curr_save.items() if value > self.kwargs["minimum_required_max_intensity"]/10}
+            ordered_mass_intensity_dict = self.combine_and_sum_dicts(ordered_mass_intensity_dict, curr_save)
+            ordered_mass_intensity_dict = {round(key, self.kwargs["round_for_masses_summary"]): value for key, value in ordered_mass_intensity_dict.items() if value > self.kwargs["minimum_required_max_intensity"]/10}
+        print("ORDERED MASS INTENSITY DICT____FIRST STEP:")
+        print(len(ordered_mass_intensity_dict))
+        print(ordered_mass_intensity_dict)
+
+        ordered_mass_intensity_dict = dict(sorted(ordered_mass_intensity_dict.items(), key=lambda x: x[1], reverse=True))
+        ordered_mass_intensity_dict = self.summarize_mass_intensity_dict_with_deviation(ordered_mass_intensity_dict, self.kwargs["mass_deviation"])
+        print("ORDERED MASS INTENSITY DICT____SECOND STEP:")
+        print(len(ordered_mass_intensity_dict))
+        print(ordered_mass_intensity_dict)
+
+        ordered_mass_intensity_dict = dict(sorted(ordered_mass_intensity_dict.items(), key=lambda x: x[1], reverse=True))
+        ordered_mass_intensity_dict = {key: value for key, value in ordered_mass_intensity_dict.items() if value > self.kwargs["minimum_required_max_intensity"]}
+        print("ORDERED MASS INTENSITY DICT____LAST STEP:")
+        print(len(ordered_mass_intensity_dict))
+        print(ordered_mass_intensity_dict)
+        return ordered_mass_intensity_dict
+    
         
             
 
@@ -1174,6 +1370,8 @@ if __name__ == "__main__":
     mzml_filename = "C://Users//Admin//Desktop//UVenture//Evaluation_folder//F12_HRAIF4_3.mzML"
 
     ms_file = MS_File(mzml_filename)
+
+    find_peaks = PeakFinding(ms_file)
     #myspec = Spec(ms_file, 400, requested_filter_mode="Full scan", save_plot=True, unique_spec_folder="test/")
 
     #print(myspec.index)
@@ -1191,7 +1389,7 @@ if __name__ == "__main__":
     
     #myprediction = Prediction(ms_file, 117.0554, myspec, save_plot_of_isotopologues=True, charge_of_measured_mass=-1, formula_cache_folder_path="C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//")
 
-    myanalysis = OneAnalysis(ms_file, 117.0554, ms_file.rt_list[79], mass_deviation=11, mass_deviation_xic=0.001, charge_of_measured_mass=-1, formula_cache_folder_path="C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//")
+    #myanalysis = OneAnalysis(ms_file, 117.0554, ms_file.rt_list[79], mass_deviation=11, mass_deviation_xic=0.001, charge_of_measured_mass=-1, formula_cache_folder_path="C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//")
 
     print(myanalysis.molecular_ion_prediction.best_formula_prediction)
     print(myanalysis.molecular_ion_prediction.score_of_best_formula)
