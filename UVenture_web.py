@@ -29,7 +29,18 @@ class Webpage:
                 if not "mass_analysis_cb" in form_data:
                     form_data["mass_analysis_cb"] = "false"
                 print(form_data)
-                ms_file = UVenture.MS_File(form_data["ms_file"], parentfolder=self.results_folder)
+                keys_to_check = ["mz_peak_analysis", "mz_mass_analysis", "retention_time"]
+                for k in keys_to_check:
+                    try:
+                        form_data[k] = float(form_data[k])
+                    except:
+                        pass
+                try:
+                    form_data["spec_index"] = int(form_data["spec_index"])
+                except:
+                    pass
+                ms_filepath = self.mzml_folder + form_data["fileselection"]
+                ms_file = UVenture.MS_File(ms_filepath, parentfolder=self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/")
                 print("MS file loaded")
                 if form_data["peak_analysis_cb"] == "true":
                     if form_data["mz_peak_analysis"] == "":
