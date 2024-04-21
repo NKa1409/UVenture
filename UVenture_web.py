@@ -1,14 +1,17 @@
 import os
 import threading
 import time
+import traceback
 import flask
 import werkzeug
+import UVenture
 
 
 class Webpage:
     def __init__(self) -> None:
         self.parentfolder = "webserver_save/"
         self.mzml_folder = self.parentfolder + "mzml_files/"
+        self.results_folder = self.parentfolder + "results/"
         self.app = flask.Flask(__name__)
         self.server = None
         self.available_files = os.listdir(self.mzml_folder)
@@ -26,7 +29,25 @@ class Webpage:
                 if not "mass_analysis_cb" in form_data:
                     form_data["mass_analysis_cb"] = "false"
                 print(form_data)
-                
+                ms_file = UVenture.MS_File(form_data["ms_file"], parentfolder=self.results_folder)
+                print("MS file loaded")
+                if form_data["peak_analysis_cb"] == "true":
+                    if form_data["mz_peak_analysis"] == "":
+                        return flask.render_template_string("No m/z given! Cannot analyze peak without a mass. \n Please enter a peak to analyse")
+                    if form_data["retention_time"] == "":
+                        return flask.render_template_string("No retention time given! Cannot analyze peak without retention time. \nPlease enter a retention time")
+                    try:
+                        myanalysis = UVenture.OneAnalysis(ms_file, form_data["mz_peak_analysis"], form_data["retention_time"], mass_deviation=11, mass_deviation_xic=0.001, charge_of_measured_mass=-1, formula_cache_folder_path="C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//")
+                    except Exception as e:
+                        print(e)
+                        print(traceback.format_exc())
+                        return flask.render_template_string("An error occured during the analysis" + str(e) + "\n \n \n" + str(traceback.format_exc()))
+                    print("Peak analysis started")
+                if form_data["mass_analysis_cb"] == "true":
+                    myspec = UVenture.Spec(ms_file, form_data["spec_index"], requested_filter_mode="whatever", save_plot=True)
+                    myanalysis = UVenture.Prediction(ms_file, form_data["mz_mass_analysis"], myspec, save_plot_of_isotopologues=True, charge_of_measured_mass=-1, formula_cache_folder_path="C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//")
+                    print("Mass analysis started")
+                print("Analysis started")
                 return flask.redirect("/")
             return flask.render_template("queue_new_analysis.html", files=self.available_files)
 
@@ -64,7 +85,7 @@ class Webpage:
         #self.server = werkzeug.serving.make_server('127.0.0.1', 5000, self.app)
         #self.thread = threading.Thread(target=self.server.serve_forever)
         #self.thread.start()
-        self.app.run(debug=True, use_reloader=True, port=5000)
+        #self.app.run(debug=True, use_reloader=True, port=5000)
 
     def __del__(self):
         # Stop the Flask application when the object is deleted
@@ -78,8 +99,10 @@ class Webpage:
 
 
 
-webapp = Webpage()
-print("Server running")
-while True:
-    time.sleep(1)
+if __name__ == "__main__":
+    webapp = Webpage()
+    webapp.app.run(debug=True, use_reloader=True, port=5000)
+    print("Server running")
+    while True:
+        time.sleep(1)
     

@@ -27,9 +27,13 @@ import plotly.graph_objects as go
 
 class MS_File:
     def __init__(self, filename, **kwargs):
-        default_kwargs = {"parentfolder":str(".".join(filename.split(".")[:-1]) + "/"),
+        if "parentfolder" in kwargs:
+            parentfolder = kwargs["parentfolder"]
+        else:
+            parentfolder = str(".".join(filename.split(".")[:-1]) + "/")
+        default_kwargs = {"parentfolder":parentfolder,
                           "peak_infos":[],
-                          "logfile_filepath": str(".".join(filename.split(".")[:-1]) + "/" + "logfile.txt") }
+                          "logfile_filepath":parentfolder + "logfile.txt" }
         kwargs = {**default_kwargs, **kwargs}
         self.filename = filename
         self.parentfolder = kwargs["parentfolder"]
