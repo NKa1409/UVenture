@@ -4,6 +4,7 @@ import os
 import threading
 import time
 import traceback
+import zipfile
 import flask
 from matplotlib import pyplot as plt
 import werkzeug
@@ -70,6 +71,30 @@ class Webpage:
                 return flask.redirect("/")
             return flask.render_template("queue_new_analysis.html", files=self.available_files)
 
+        @self.app.route("/resultsdownload", methods=["GET", "POST"])
+        def resultsdownload():
+            if flask.request.method == "POST":
+                folderpath = self.results_folder + ".".join(flask.request.form["fileselection"].split(".")[:-1]) + "/"
+                print(folderpath)
+                # Create a temporary zip file in memory
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                    for root, dirs, files in os.walk(folderpath):
+                        for file in files:
+                            zip_file.write(os.path.join(root, file), 
+                                           os.path.relpath(os.path.join(root, file), 
+                                           os.path.join(folderpath, '..')))
+                zip_buffer.seek(0)
+                return flask.send_file(zip_buffer, as_attachment=True, download_name="results.zip")
+            return flask.render_template("resultsdownload.html", files=self.available_files, basefolder=self.results_folder)
+
+        @self.app.route("/show_currently_running", methods=["GET", "POST"])
+        def show_currently_running():
+            tasks_information = []
+            for task in threading.enumerate():
+                tasks_information.append({"name": task.name, "is_alive": task.is_alive()})
+                
+            return flask.render_template("show_currently_running.html", tasks_information=tasks_information)
 
         @self.app.route("/mzml_file_viewer", methods=["GET", "POST"])
         def mzml_file_viewer():
@@ -162,10 +187,6 @@ class Webpage:
             """Show links to all the available websites within this server."""
             urls = [str(rule) for rule in self.app.url_map.iter_rules() if rule.endpoint != 'static']
             return flask.render_template("all_routes.html", urls=urls)
-            
-        @self.app.route("/analysis_started", methods=["POST", "GET"])
-        def analysis_started():
-            return flask.render_template("analysis_started.html")
         
         @self.app.route("/upload_mzml_file", methods=["POST", "GET"])
         def upload():

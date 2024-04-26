@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Welcome to UVenture</title>
+    
 </head>
 <body>
-    <h1>Welcome to UVenture</h1>
-    <p>Thank you for visiting our website!</p>
+    {% include 'navbar.html' %}
 
     <h1>Available pages:</h1>
+    <p>
     {% for url in urls %}
         <a href="{{ url }}">{{ url }}</a><br>
     {% endfor %}
-    
+    </p>
 </body>
 </html>

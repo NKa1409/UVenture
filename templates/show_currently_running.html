@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+</head>
+<body>
+    {% include 'navbar.html' %}
+    
+    <h1>Currently Running Tasks</h1>
+    <ul>
+    {% for task in tasks_information %}
+        <li>{{ task }}</li>
+    {% endfor %}
+    </ul>
+</body>
+</html>
