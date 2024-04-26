@@ -1,10 +1,14 @@
+import base64
+import io
 import os
 import threading
 import time
 import traceback
 import flask
+from matplotlib import pyplot as plt
 import werkzeug
 import UVenture
+import MS_functions
 
 
 class Webpage:
@@ -15,6 +19,10 @@ class Webpage:
         self.app = flask.Flask(__name__)
         self.server = None
         self.available_files = os.listdir(self.mzml_folder)
+        self.curr_ms_file = None
+        self.curr_xic_encoded_plot = {}
+        self.curr_spec_encoded_plot = {}
+        self.curr_mass_deviation = 0
 
         @self.app.route("/", methods=["GET", "POST"])
         def index():
@@ -62,6 +70,92 @@ class Webpage:
                 return flask.redirect("/")
             return flask.render_template("queue_new_analysis.html", files=self.available_files)
 
+
+        @self.app.route("/mzml_file_viewer", methods=["GET", "POST"])
+        def mzml_file_viewer():
+            return flask.render_template("mzml_file_viewer.html", files=self.available_files)
+
+        @self.app.route("/update_mzml_plot_viewer_plots", methods=["GET", "POST"])
+        def update_mzml_plot_viewer_plots():
+            if flask.request.method == "POST":
+                print("POST request received")
+                # Parse the JSON request
+                data = flask.request.get_json()
+                print(data)
+                file_select = ""
+                try:
+                    xic_mass = float(data['xic_mass'])
+                except:
+                    xic_mass = 150
+                try:
+                    mass_deviation = float(data['mass_deviation'])
+                except:
+                    mass_deviation = 0.001
+                try:
+                    spec_index = int(data['spec_index'])
+                except:
+                    spec_index = 1
+                file_select = data['fileSelect']
+                if file_select == "":
+                    print("No file selected!")
+                    return "No file selected!"
+                print(xic_mass, spec_index, file_select)
+                calc_new_file = True
+                try:
+                    print(self.curr_ms_file.filename, file_select)
+                    if self.curr_ms_file.filename == self.mzml_folder + file_select:
+                        print("Same file selected")
+                        calc_new_file = False
+                    else:
+                        print("Different file selected")
+                        calc_new_file = True
+                except:
+                    print("First file selected")
+                    calc_new_file = True
+                if calc_new_file:
+                    ms_filepath = self.mzml_folder + file_select
+                    self.curr_ms_file = UVenture.MS_File(ms_filepath, parentfolder=self.results_folder + str(".".join(file_select.split(".")[:-1])) + "/")
+                print("MS file loaded")
+                if calc_new_file == False and (xic_mass in list(self.curr_xic_encoded_plot.keys())) and (mass_deviation == self.curr_mass_deviation):
+                    print("XIC plot already calculated")
+                    base64_image_1 = self.curr_xic_encoded_plot[xic_mass]
+                else:
+                    self.curr_xic_encoded_plot = {}
+                    xic = MS_functions.get_xic_fast(self.curr_ms_file.rawdata, xic_mass, mass_deviation)
+                    self.curr_mass_deviation = mass_deviation
+                    print("XIC calculated")
+                    fig, ax = plt.subplots(layout="tight")
+                    ax.plot(xic[0], xic[1])
+                    ax.set_title("XIC of mass " + str(xic_mass) + " in spectrum " + str(file_select))
+                    ax.set_xlabel("Retention time (s)")
+                    ax.set_ylabel("Intensity")
+                    png_image_1 = io.BytesIO()
+                    fig.savefig(png_image_1, format="png")
+                    png_image_1.seek(0)
+                    base64_image_1 = base64.b64encode(png_image_1.read()).decode()
+                    self.curr_xic_encoded_plot[xic_mass] = base64_image_1
+                print("XIC plot saved")
+
+                if calc_new_file == False and (spec_index in list(self.curr_spec_encoded_plot.keys())):
+                    print("Spectrum plot already calculated")
+                    base64_image_2 = self.curr_spec_encoded_plot[spec_index]
+                else:
+                    self.curr_spec_encoded_plot = {}
+                    fig2, ax2 = plt.subplots(layout="tight")
+                    masses = list(self.curr_ms_file.rawdata[spec_index]["m/z array"])
+                    intensities = list(self.curr_ms_file.rawdata[spec_index]["intensity array"])
+                    ax2.bar(masses, intensities)
+                    ax2.set_title("Spectrum " + str(spec_index) + " in file " + str(file_select))
+                    ax2.set_xlabel("m/z")
+                    ax2.set_ylabel("Intensity")
+                    png_image_2 = io.BytesIO()
+                    fig2.savefig(png_image_2, format="png")
+                    png_image_2.seek(0)
+                    base64_image_2 = base64.b64encode(png_image_2.read()).decode()
+                    self.curr_spec_encoded_plot[spec_index] = base64_image_2
+                print("Spectrum plot saved")
+                return flask.jsonify({'plot1': base64_image_1, 'plot2': base64_image_2})
+            return "test"
 
         @self.app.route("/all_routes")
         def all_routes():

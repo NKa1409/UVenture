@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>U_Venture</title>
+    <link rel="icon" href="{{ url_for('static', filename='uventure_icon.png') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="U_Venture. A simple tool to analyze full scan / AIF high resolution mass spectra. Provides formula predictions as well as MS/MS fragments.">
+    <meta charset="UTF-8">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script>
+        function updatePlot() {
+            var xic_mass = $('#xic_mass').val();
+            var mass_deviation = $('#mass_deviation').val();
+            var spec_index = $('#spec_index').val();
+            var fileSelect = $('#fileSelect').val();
+
+            // Show loading circle before the request
+            $('#plotArea1').html('<div class="loader"></div>');
+            $('#plotArea2').html('<div class="loader"></div>');
+
+            // Add CSS for the loader
+            $('<style>.loader {border: 16px solid #f3f3f3; border-radius: 50%; border-top: 16px solid #3498db; width: 120px; height: 120px; -webkit-animation: spin 2s linear infinite; /* Safari */ animation: spin 2s linear infinite;} @-webkit-keyframes spin {0% { -webkit-transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); }} @keyframes spin {0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); }}</style>').appendTo('head');
+
+            $.ajax({
+                url: '/update_mzml_plot_viewer_plots', // replace with your Flask route
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ 'xic_mass': xic_mass, 'spec_index': spec_index, "fileSelect": fileSelect, "mass_deviation": mass_deviation }),
+                success: function(response) {
+                    // Assuming the response is a matplotlib object
+                    var plot1 = response['plot1'];
+                    var plot2 = response['plot2'];
+
+                    // Convert the matplotlib objects to base64 encoded PNG
+                    var plot1Base64 = 'data:image/png;base64,' + plot1;
+                    var plot2Base64 = 'data:image/png;base64,' + plot2;
+
+                    // Append the images to the divs with style to fit the container
+                    $('#plotArea1').html('<img src="' + plot1Base64 + '" style="width: 100%; height: auto;">');
+                    $('#plotArea2').html('<img src="' + plot2Base64 + '" style="width: 100%; height: auto;">');
+                    
+                },
+                error: function(error) {
+                    console.log(error);
+                }
+            });
+
+            
+        }
+    </script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: auto;
+            overflow-x: hidden;
+            margin: 0;
+            text-align: center;
+        }
+        body p {
+            width: 50%;
+            margin: 0 auto;
+            text-align: left;
+            font-family: Arial, sans-serif;
+            font-size: 1.1em;
+            color: #333;
+        }
+        h1 {
+            margin-bottom: 50px;
+        }
+        form {
+            width: 50%;
+            margin: 20px auto;
+            align-items: left;
+            background-color: #f2f2f2cf; 
+            padding: 20px; 
+            border-radius: 10px;
+        }
+        .plot_div {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <h1 style="font-size: 3em; color: #224c84; font-family: Arial, sans-serif;">.mzML viewer</h1>
+
+    <p>
+        Select the file that you want to look at. <br>
+        If the file is not available, you can upload one <a href="/upload_mzml_file">here</a>.
+        <br>
+        <br>
+        Go back to queue a new analysis <a href="/queue_new_analysis">here</a>.
+        <br>
+    </p>
+
+    <hr style="width: 50%; border-width: 3px; margin: auto;">
+
+    <div class="form">
+        <label for="fileSelect">Select a file:</label>
+        <select id="fileSelect" name="fileSelect" style="margin-bottom: 10px;">
+            {% for file in files %}
+                <option value="{{ file }}">{{ file }}</option>
+            {% endfor %}
+        </select>
+        <label for="xic_mass">XIC mass [u]:</label>
+        <input type="number" id="xic_mass" name="xic_mass" step="0.0001" style="margin-bottom: 10px;">
+        <label for="mass_deviation">Mass Deviation [u]:</label>
+        <input type="number" id="mass_deviation" name="mass_deviation" step="0.0001" style="margin-bottom: 10px;">
+        <label for="spec_index">Spectrum index:</label>
+        <input type="number" id="spec_index" name="spec_index" style="margin-bottom: 10px;">
+        <button onclick="updatePlot()" style="padding: 10px 20px;">Go!</button>
+    </div>
+
+    <hr style="width: 50%; border-width: 3px; margin: auto;">
+
+
+    <div class="plot_div">
+        <div id="plotArea1" style="width: 50%; height: 500px; border: 1px solid black;">Test</div>
+        <div id="plotArea2" style="width: 50%; height: 500px; border: 1px solid black;">Test2</div>
+    </div>
+
+    
+</body>
+</html>

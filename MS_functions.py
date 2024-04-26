@@ -18,6 +18,28 @@ def read_mzml_file(mzml_filename):
     return f
 
 
+def get_xic_fast(f, mass, mass_deviation):
+    def is_within_deviation(m):
+        return mass-mass_deviation <= m <= mass+mass_deviation
+    rt_list = [element["scanList"]["scan"][0]["scan time"] for element in f]
+    intensity_list = []
+    for entry in f:
+        y = (i for i,v in enumerate(entry["m/z array"]) if is_within_deviation(v))
+        mass_indices = []
+        while True:
+            try:
+                mass_indices.append(next(y))
+            except:
+                break
+        try:
+            curr_sum_int = 0
+            for mass_index in mass_indices:
+                curr_sum_int = curr_sum_int + entry["intensity array"][mass_index]
+            intensity_list.append(curr_sum_int)
+        except:
+            intensity_list.append(0)
+    return [rt_list, intensity_list]
+
 def get_xic(f, mass, mass_deviation, requested_filter_mode="Full scan"):
     def is_within_deviation(m):
         return mass-mass_deviation <= m <= mass+mass_deviation
