@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script>
         function updatePlot() {
             var xic_mass = $('#xic_mass').val();
@@ -10,8 +9,8 @@
             var fileSelect = $('#fileSelect').val();
 
             // Show loading circle before the request
-            $('#plotArea1').html('<div class="loader"></div>');
-            $('#plotArea2').html('<div class="loader"></div>');
+            $('#plotArea1').html('<div class="loader">Loading...</div>');
+            $('#plotArea2').html('<div class="loader">Loading...</div>');
 
             // Add CSS for the loader
             $('<style>.loader {border: 16px solid #f3f3f3; border-radius: 50%; border-top: 16px solid #3498db; width: 120px; height: 120px; -webkit-animation: spin 2s linear infinite; animation: spin 2s linear infinite; position: relative; top: 20%; left: 30%; transform: translate(-20%, -30%);} @-webkit-keyframes spin {0% { -webkit-transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); }} @keyframes spin {0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); }}</style>').appendTo('head');
@@ -108,8 +107,15 @@
     <hr>
 
     <div class="plot_div">
-        <div id="plotArea1" style="width: 50%; height: 500px; border: 1px solid black;">Test</div>
-        <div id="plotArea2" style="width: 50%; height: 500px; border: 1px solid black;">Test2</div>
+        <div id="plotArea1" style="width: 50%; height: 500px; border: 1px solid black;">XIC</div>
+        <div id="plotArea2" style="width: 50%; height: 500px; border: 1px solid black;">Mass spectrum</div>
+    </div>
+
+    <hr>
+
+    <div>
+        
+
     </div>
 
     

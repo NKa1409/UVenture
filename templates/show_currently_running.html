@@ -7,9 +7,14 @@
     {% include 'navbar.html' %}
     
     <h1>Currently Running Tasks</h1>
+
+    <p>Below is a list of all the tasks that are currently running on the server. The tasks are listed in the order they were started.</p>
+    <hr>
     <ul>
+    {% set previous_task_name = "None" %}
     {% for task in tasks_information %}
-        <li>{{ task }}</li>
+        <li> {{ task }} {% if task.name.startswith("UVenture_") %} {% if task.is_alive %}<span style="color:rgb(245, 249, 10); font-weight: bold; font-size: 50px;">&#x25CF;</span>{% else %}<span style="color:rgb(56, 227, 30); font-weight: bold; font-size: 50px;">&#x25CF;</span>{% endif %}{% endif %}</li>
+        {% set previous_task_name = task.name %}
     {% endfor %}
     </ul>
 </body>

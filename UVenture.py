@@ -32,13 +32,11 @@ class MS_File:
         else:
             parentfolder = str(".".join(filename.split(".")[:-1]) + "/")
         default_kwargs = {"parentfolder":parentfolder,
-                          "peak_infos":[],
                           "logfile_filepath":parentfolder + "logfile.txt" }
         kwargs = {**default_kwargs, **kwargs}
         self.filename = filename
         self.parentfolder = kwargs["parentfolder"]
         os.makedirs(self.parentfolder, exist_ok=True)
-        self.peak_infos = kwargs["peak_infos"]
 
         self.file = None
         self.rawdata = None
@@ -852,8 +850,7 @@ class OneAnalysis:
         self.ms_file = ms_file
         self.peak_index = self.ms_file.rt_list.index(min(self.ms_file.rt_list, key=lambda x: abs(self.rt - x)))
 
-        default_kwargs = {"peak_infos":[],  
-                          "save_oneanalysis_xic_plot":True,
+        default_kwargs = {"save_oneanalysis_xic_plot":True,
                           "one_analysis_folder":str(self.ms_file.parentfolder + "/" + str(self.mass) + "_" + str(self.rt) + "/"),
                           "mass_deviation":11,
                           "mass_deviation_xic":(50*self.mass)/1000000,

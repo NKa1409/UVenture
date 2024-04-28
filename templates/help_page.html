@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+</head>
+<body>
+    {% include 'navbar.html' %}
+    
+    <h1>Help Page</h1>
+
+    <div class="table-of-contents">
+        <h2>Table of Contents</h2>
+        <ul>
+            {% for key, value in contents_dict.items() %}
+                <li><a href="#{{ key }}">{{ key }}</a></li>
+            {% endfor %}
+        </ul>
+    </div>
+
+
+    <div>
+        {% for key, value in contents_dict.items() %}
+            <div style="padding: 20px; width: 50%; border: 1px solid black; align-items: center;">
+                <p style="font-size: 20px; font-weight: bolder; padding-bottom: 20px;" id="{{ key }}">{{ key }}</p>
+                <p style="font-family: monospace;">{{ value }}</p><br>
+            </div>
+        {% endfor %}
+    </div>
+    
+
+    <form method="POST" action="/help_page">
+        <label for="question">Question:</label><br>
+        <input type="text" id="question" name="question"><br>
+        <label for="answer">Answer:</label><br>
+        <textarea id="answer" name="answer"></textarea><br>
+        <label for="add_question">Add Question:</label>
+        <input type="checkbox" id="add_question" name="add_question"><br>
+        <label for="delete_question">Delete Question:</label>
+        <input type="checkbox" id="delete_question" name="delete_question"><br>
+        <input type="submit" value="Submit">
+    </form>
+
+</body>
+</html>

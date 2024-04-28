@@ -1,6 +1,9 @@
+import ast
 import base64
+import datetime
 import io
 import os
+import shutil
 import threading
 import time
 import traceback
@@ -24,13 +27,42 @@ class Webpage:
         self.curr_xic_encoded_plot = {}
         self.curr_spec_encoded_plot = {}
         self.curr_mass_deviation = 0
+        self.settings_file_filepath = "static/settings.txt"
+        self.settings_default_file_filepath = "static/settings_default.txt"
+        self.help_page_contents_filepath = "static/help_page_contents.txt"
 
         @self.app.route("/", methods=["GET", "POST"])
         def index():
-            return flask.redirect("/queue_new_analysis")
+            if len(self.available_files) == 0:
+                return flask.redirect("/upload_mzml_file")
+            else:
+                return flask.redirect("/queue_new_analysis")
         
         @self.app.route("/queue_new_analysis", methods=["GET", "POST"])
         def queue_new_analysis():
+            settings_dict = {}
+            with open(self.settings_file_filepath, "r") as f:
+                file_contents_raw = f.read()
+                lines = file_contents_raw.split("\n")
+                for line in lines:
+                    line = line.strip()
+                    if not "=" in line:
+                        continue
+                    if line[0] == "#":
+                        continue
+                    key, value = line.split("=")
+                    try:
+                        value = float(value)
+                    except:
+                        try:
+                            value = int(value)
+                        except:
+                            try:
+                                value = bool(value)
+                            except:
+                                pass
+                    settings_dict[key] = value
+
             if flask.request.method == "POST":
                 form_data = flask.request.form.to_dict()
                 if not "peak_analysis_cb" in form_data:
@@ -48,8 +80,7 @@ class Webpage:
                     form_data["spec_index"] = int(form_data["spec_index"])
                 except:
                     pass
-                ms_filepath = self.mzml_folder + form_data["fileselection"]
-                ms_file = UVenture.MS_File(ms_filepath, parentfolder=self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/")
+                
                 print("MS file loaded")
                 if form_data["peak_analysis_cb"] == "true":
                     if form_data["mz_peak_analysis"] == "":
@@ -57,19 +88,92 @@ class Webpage:
                     if form_data["retention_time"] == "":
                         return flask.render_template_string("No retention time given! Cannot analyze peak without retention time. \nPlease enter a retention time")
                     try:
-                        myanalysis = UVenture.OneAnalysis(ms_file, form_data["mz_peak_analysis"], form_data["retention_time"], mass_deviation=11, mass_deviation_xic=0.001, charge_of_measured_mass=-1, formula_cache_folder_path="C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//")
+                        def run_one_analysis():
+                            try:
+                                ms_filepath = self.mzml_folder + form_data["fileselection"]
+                                ms_file = UVenture.MS_File(ms_filepath, parentfolder=self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/")
+                                myanalysis = UVenture.OneAnalysis(ms_file, form_data["mz_peak_analysis"], form_data["retention_time"], formula_cache_folder_path="C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//", **settings_dict)
+                            except Exception as e:
+                                print(e)
+                                print(traceback.format_exc())
+                                return flask.render_template_string("An error occurred during the analysis" + str(e) + "\n \n \n" + str(traceback.format_exc()))                        
+                        thread_name = "UVenture_OneAnalysis_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_file_" + str(form_data["fileselection"]) + "_mass_" + str(form_data["mz_peak_analysis"]) + "_rt_" + str(form_data["retention_time"])
+                        thread = threading.Thread(target=run_one_analysis, name=thread_name)
+                        thread.start()
+                        all_threads = threading.enumerate()
+                        running_threads = [t.name for t in all_threads if t.is_alive()]
+                        print("Running threads:", running_threads)
                     except Exception as e:
                         print(e)
                         print(traceback.format_exc())
                         return flask.render_template_string("An error occured during the analysis" + str(e) + "\n \n \n" + str(traceback.format_exc()))
                     print("Peak analysis started")
+
                 if form_data["mass_analysis_cb"] == "true":
-                    myspec = UVenture.Spec(ms_file, form_data["spec_index"], requested_filter_mode="whatever", save_plot=True)
-                    myanalysis = UVenture.Prediction(ms_file, form_data["mz_mass_analysis"], myspec, save_plot_of_isotopologues=True, charge_of_measured_mass=-1, formula_cache_folder_path="C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//")
+                    if form_data["mz_mass_analysis"] == "":
+                        return flask.render_template_string("No m/z given! Cannot analyze peak without a mass. \n Please enter a peak to analyse")
+                    if form_data["spec_index"] == "":
+                        return flask.render_template_string("No retention time given! Cannot analyze peak without retention time. \nPlease enter a retention time")
+                    def run_prediction_analysis():
+                        try:
+                            ms_filepath = self.mzml_folder + form_data["fileselection"]
+                            ms_file = UVenture.MS_File(ms_filepath, parentfolder=self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/")
+                            myspec = UVenture.Spec(ms_file, form_data["spec_index"], **settings_dict)
+                            myanalysis = UVenture.Prediction(ms_file, form_data["mz_mass_analysis"], myspec, formula_cache_folder_path="C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//", **settings_dict)
+                        except Exception as e:
+                            print(e)
+                            print(traceback.format_exc())
+                            return flask.render_template_string("An error occurred during the analysis" + str(e) + "\n \n \n" + str(traceback.format_exc()))
+                    thread_name = "UVenture_Prediction_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_file_" + str(form_data["fileselection"]) + "_mass_" + str(form_data["mz_mass_analysis"]) + "_specindex_" + str(form_data["spec_index"])
+                    thread = threading.Thread(target=run_prediction_analysis, name=thread_name)
+                    thread.start()
                     print("Mass analysis started")
                 print("Analysis started")
-                return flask.redirect("/")
+                return flask.redirect("/show_currently_running")
             return flask.render_template("queue_new_analysis.html", files=self.available_files)
+
+        @self.app.route("/change_settings", methods=["GET", "POST"])
+        def change_settings():
+            settings_dict = {}
+            file_contents_raw = ""
+            with open(self.settings_file_filepath, "r") as f:
+                file_contents_raw = f.read()
+                lines = file_contents_raw.split("\n")
+                for line in lines:
+                    line = line.strip()
+                    if not "=" in line:
+                        continue
+                    if line[0] == "#":
+                        continue
+                    key, value = line.split("=")
+                    try:
+                        value = float(value)
+                    except:
+                        try:
+                            value = int(value)
+                        except:
+                            try:
+                                value = ast.literal_eval(value)
+                            except:
+                                value = str(value)
+                    settings_dict[key] = value
+            
+            if flask.request.method == "POST":
+                if flask.request.form.get("button") == "save_button":
+                    form_data = flask.request.form.to_dict()
+                    print(form_data)
+                    del form_data["button"]
+                    with open(self.settings_file_filepath, "w") as f:
+                        for key in form_data:
+                            f.write(key + "=" + str(form_data[key]) + "\n")
+                    print("New settings saved")
+                    print(form_data)
+                if flask.request.form.get("button") == "restore_default_values":
+                    os.remove(self.settings_file_filepath)
+                    shutil.copyfile(self.settings_default_file_filepath, self.settings_file_filepath)
+                return flask.redirect("/change_settings")
+                
+            return flask.render_template("change_settings.html", settings_dict=settings_dict, file_contents_raw=file_contents_raw)
 
         @self.app.route("/resultsdownload", methods=["GET", "POST"])
         def resultsdownload():
@@ -90,14 +194,21 @@ class Webpage:
 
         @self.app.route("/show_currently_running", methods=["GET", "POST"])
         def show_currently_running():
+            all_threads = threading.enumerate()
             tasks_information = []
-            for task in threading.enumerate():
-                tasks_information.append({"name": task.name, "is_alive": task.is_alive()})
-                
+            for task in all_threads:
+                if task.name.startswith("UVenture_"):
+                    tasks_information.append({"name": task.name, "is_alive": task.is_alive()})
+            tasks_information.sort(key=lambda x: x["name"])
+            tasks_information.append({"name": "█████████████████████████████████████████████████████████████████████", "is_alive": True})
+            for task in all_threads:
+                if not task.name.startswith("UVenture_"):
+                    tasks_information.append({"name": task.name, "is_alive": task.is_alive()})                
             return flask.render_template("show_currently_running.html", tasks_information=tasks_information)
 
         @self.app.route("/mzml_file_viewer", methods=["GET", "POST"])
         def mzml_file_viewer():
+
             return flask.render_template("mzml_file_viewer.html", files=self.available_files)
 
         @self.app.route("/update_mzml_plot_viewer_plots", methods=["GET", "POST"])
@@ -188,8 +299,44 @@ class Webpage:
             urls = [str(rule) for rule in self.app.url_map.iter_rules() if rule.endpoint != 'static']
             return flask.render_template("all_routes.html", urls=urls)
         
+        @self.app.route("/help_page", methods=["GET", "POST"])
+        def help_page():
+            contents_dict = {}
+            with open(self.help_page_contents_filepath, "r") as f:
+                lines = f.readlines()
+                for line in lines:
+                    line = line.strip()
+                    if line == "":
+                        continue
+                    if line[0] == "#":
+                        continue
+                    question = line.split("   esUWFds!&$!=====asfeDVW   ")[0]
+                    answer = line.split("   esUWFds!&$!=====asfeDVW   ")[1]
+                    contents_dict[question] = answer
+            if flask.request.method == "POST":
+                print(flask.request.form.to_dict())
+                form_data = flask.request.form.to_dict()
+                if "add_question" in form_data:
+                    question = form_data["question"]
+                    answer = form_data["answer"]
+                    with open(self.help_page_contents_filepath, "a") as f:
+                        f.write(str(question) + "   esUWFds!&$!=====asfeDVW   " + str(answer) + "\n")
+                    contents_dict[question] = answer
+                if "delete_question" in form_data:
+                    question = form_data["question"]
+                    with open(self.help_page_contents_filepath, "r") as f:
+                        lines = f.readlines()
+                    with open(self.help_page_contents_filepath, "w") as f:
+                        for line in lines:
+                            if question in line:
+                                continue
+                            f.write(line)
+                    contents_dict.pop(question)
+            return flask.render_template("help_page.html", contents_dict=contents_dict)
+        
+
         @self.app.route("/upload_mzml_file", methods=["POST", "GET"])
-        def upload():
+        def upload_mzml_file():
             """If the user has uploaded a file, save it to the parent folder"""
             if "file" in flask.request.files:
                 file = flask.request.files["file"]
