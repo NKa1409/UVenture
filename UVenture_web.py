@@ -10,9 +10,12 @@ import traceback
 import zipfile
 import flask
 from matplotlib import pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
 import werkzeug
 import UVenture
 import MS_functions
+import multiprocessing
 
 
 class Webpage:
@@ -58,9 +61,9 @@ class Webpage:
                             value = int(value)
                         except:
                             try:
-                                value = bool(value)
+                                value = ast.literal_eval(value)
                             except:
-                                pass
+                                value = str(value)
                     settings_dict[key] = value
 
             if flask.request.method == "POST":
@@ -92,17 +95,19 @@ class Webpage:
                             try:
                                 ms_filepath = self.mzml_folder + form_data["fileselection"]
                                 ms_file = UVenture.MS_File(ms_filepath, parentfolder=self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/")
-                                myanalysis = UVenture.OneAnalysis(ms_file, form_data["mz_peak_analysis"], form_data["retention_time"], formula_cache_folder_path="C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//", **settings_dict)
+                                myanalysis = UVenture.OneAnalysis(ms_file, form_data["mz_peak_analysis"], form_data["retention_time"], **settings_dict)
                             except Exception as e:
                                 print(e)
-                                print(traceback.format_exc())
-                                return flask.render_template_string("An error occurred during the analysis" + str(e) + "\n \n \n" + str(traceback.format_exc()))                        
+                                print(traceback.format_exc())                        
                         thread_name = "UVenture_OneAnalysis_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_file_" + str(form_data["fileselection"]) + "_mass_" + str(form_data["mz_peak_analysis"]) + "_rt_" + str(form_data["retention_time"])
                         thread = threading.Thread(target=run_one_analysis, name=thread_name)
                         thread.start()
                         all_threads = threading.enumerate()
                         running_threads = [t.name for t in all_threads if t.is_alive()]
+                        running_processes = [p.name for p in multiprocessing.active_children()]
                         print("Running threads:", running_threads)
+                        print("Running processes:", running_processes)
+                        ...
                     except Exception as e:
                         print(e)
                         print(traceback.format_exc())
@@ -118,12 +123,14 @@ class Webpage:
                         try:
                             ms_filepath = self.mzml_folder + form_data["fileselection"]
                             ms_file = UVenture.MS_File(ms_filepath, parentfolder=self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/")
+                            settings_dict["requested_filter_mode"] = settings_dict["xic_requested_filter_mode"]
                             myspec = UVenture.Spec(ms_file, form_data["spec_index"], **settings_dict)
-                            myanalysis = UVenture.Prediction(ms_file, form_data["mz_mass_analysis"], myspec, formula_cache_folder_path="C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//", **settings_dict)
+                            print("Spec created")
+                            print("Starting mass prediction")
+                            myanalysis = UVenture.Prediction(ms_file, form_data["mz_mass_analysis"], myspec, **settings_dict)
                         except Exception as e:
                             print(e)
                             print(traceback.format_exc())
-                            return flask.render_template_string("An error occurred during the analysis" + str(e) + "\n \n \n" + str(traceback.format_exc()))
                     thread_name = "UVenture_Prediction_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_file_" + str(form_data["fileselection"]) + "_mass_" + str(form_data["mz_mass_analysis"]) + "_specindex_" + str(form_data["spec_index"])
                     thread = threading.Thread(target=run_prediction_analysis, name=thread_name)
                     thread.start()
@@ -334,7 +341,6 @@ class Webpage:
                     contents_dict.pop(question)
             return flask.render_template("help_page.html", contents_dict=contents_dict)
         
-
         @self.app.route("/upload_mzml_file", methods=["POST", "GET"])
         def upload_mzml_file():
             """If the user has uploaded a file, save it to the parent folder"""
