@@ -9,7 +9,72 @@
     <h1>Upload MZML File</h1>
 
     <form action="/upload_mzml_file" method="post" enctype="multipart/form-data">
-        <input type="file" name="file">
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="fileSelect">Select a file:</label>
+            <input type="file" name="file">
+        </div>
+        
+        <br>
+
+        <div class="form-group">
+            <label for="file_location">Sampling location:</label>
+            <input type="text" id="file_location" name="file_location" placeholder="Sampling location">
+        </div>
+        <br>
+        <div class="form-group">
+            <label for="file_date_time">Date & Time (when sampled?):</label>
+            <input type="datetime-local" id="file_date_time" name="file_date_time" placeholder="Date & time">
+        </div>
+        <br>
+        <div class="form-group">
+            <label for="file_date_time_analyzed">Date & Time (when analyzed?):</label>
+            <input type="datetime-local" id="file_date_time_analyzed" name="file_date_time_analyzed" placeholder="Date & time">
+        </div>
+        <br>
+        <div class="form-group">
+            <label for="file_comments">Comments:</label>
+            <textarea id="file_comments" name="file_comments" placeholder="Input comments about the sample..." style="width: 400px;"></textarea>
+        </div>
+        <br>
+        <div class="form-group">
+            <label for="file_weather">Weather:</label>
+            <input type="text" id="file_weather" name="file_weather" placeholder="Weather">
+        </div>
+        <br>
+        <div class="form-group">
+            <label for="file_sample_type">Sample type:</label>
+            <input type="text" id="file_sample_type" name="file_sample_type" placeholder="Sample type">
+        </div>
+        <br>
+        <div class="form-group">
+            <label for="file_experimenter">Experimenter:</label>
+            <input type="text" id="file_experimenter" name="file_experimenter" placeholder="Who made the experiment?">
+        </div>
+        <br>
+        <div class="form-group">
+            <label for="file_instrument">Instrumental setup:</label>
+            <input type="text" id="file_instrument" name="file_instrument" placeholder="Instrumental setup">
+        </div>
+        <br>
+        <div class="form-group">
+            <label for="file_sample_prep">Sample preparation:</label>
+            <input type="text" id="file_sample_prep" name="file_sample_prep" placeholder="Preparation">
+        </div>
+        <br>
+        <div class="form-group">
+            <label for="file_original_project">Original project:</label>
+            <input type="text" id="file_original_project" name="file_original_project" placeholder="Project">
+        </div>
+        <br>
+        <div class="form-group">
+            <label for="file_original_project">Original project description:</label>
+            <input type="text" id="file_original_project" name="file_original_project" placeholder="Project description">
+        </div>
+        <br>
+
+
+
+        
         <input type="submit" value="Upload">
     </form>
 </body>

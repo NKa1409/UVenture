@@ -13,7 +13,7 @@
     <ul>
     {% set previous_task_name = "None" %}
     {% for task in tasks_information %}
-        <li> {{ task }} {% if task.name.startswith("UVenture_") %} {% if task.is_alive %}<span style="color:rgb(245, 249, 10); font-weight: bold; font-size: 50px;">&#x25CF;</span>{% else %}<span style="color:rgb(56, 227, 30); font-weight: bold; font-size: 50px;">&#x25CF;</span>{% endif %}{% endif %}</li>
+        <li> {{ task }} {% if task.name.startswith("UVenture_") %} {% if task.is_alive %}<span style="color:rgb(50, 249, 10); font-weight: bold; font-size: 20px;">████</span>{% else %}<span style="color:rgb(255, 251, 4); font-weight: bold; font-size: 20px;">████</span>{% endif %}{% endif %}</li>
         {% set previous_task_name = task.name %}
     {% endfor %}
     </ul>
