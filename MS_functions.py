@@ -18,9 +18,23 @@ def read_mzml_file(mzml_filename):
     return f
 
 
+def get_xic_fast(f, mass, mass_deviation):
+    def is_within_deviation(m):
+        return mass-mass_deviation <= m <= mass+mass_deviation
+    rt_list = [element["scanList"]["scan"][0]["scan time"] for element in f]
+    intensity_list = []
+    for entry in f:
+        try:
+            intensity_list.append(sum([entry["intensity array"][i] for i in range(len(entry["m/z array"])) if is_within_deviation(entry["m/z array"][i])]))
+        except:
+            intensity_list.append(0)
+    return [rt_list, intensity_list]
+
 def get_xic(f, mass, mass_deviation, requested_filter_mode="Full scan"):
     def is_within_deviation(m):
         return mass-mass_deviation <= m <= mass+mass_deviation
+    if (not requested_filter_mode == "Full scan") and (not requested_filter_mode == "AIF") and (not requested_filter_mode == "MS/MS"):
+        requested_filter_mode = "Full scan"
     rt_list = []
     for element in f:
         rt_list.append(element["scanList"]["scan"][0]["scan time"])
@@ -842,7 +856,7 @@ def get_formula_to_dict(formula_string):
     atom_dict = {}
     for entry in range(len(formula_string)):
         atom_name = ""
-        atom_count = ""
+        atom_count = "0"
         iterator = 0
         if not formula_string[entry - 1].isnumeric():
             continue
