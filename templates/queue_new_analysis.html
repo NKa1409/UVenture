@@ -14,19 +14,7 @@
     If you want to do mass analysis, give the spectrum index and m/z. <br>
     Then click the "Upload to server" button. <br>
     <br>
-    The spectrum index is the index of the spectrum in the mzML file. <br>
-    It can be found by viewing the file in a mzML viewer. <br>
-    <br>
-    <br>
-    The server will then start the analysis. The evaluation files will be saved in the corresponding folder on the server itself. <br>
-    <br>
     </p>
-    <hr>
-
-    <p>If you don't see a file to analyze, you can upload one <a href="/upload_mzml_file">here</a>.</p>
-    <br>
-    <p>If you want to view the .mzML file in the file viewer, you can do so <a href="/mzml_file_viewer">here</a>.</p>
-    <hr>
 
     <form action="/queue_new_analysis" method="post" enctype="multipart/form-data">
         <div class="form-group" style="margin-bottom: 20px;">
@@ -61,8 +49,8 @@
         <br>
 
         <div class="form-group">
-            <label for="mass_analysis_cb">Give peak list file (*.txt):</label>
-            <input type="checkbox" id="mass_analysis_cb" name="mass_analysis_cb" value="true">
+            <label title="Give a .txt file with each row containing 'm/z \t rt'" for="peak_analysis_list_cb">Give peak list file (*.txt):</label>
+            <input type="checkbox" id="peak_analysis_list_cb" name="peak_analysis_list_cb" value="true">
             <input type="file" name="peak_list_file" id="peak_list_file">
         </div>
 

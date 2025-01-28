@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script>
+        function openTextFile(filePath) {
+            // Fetch the text file content
+            fetch(filePath)
+                .then(response => response.text())
+                .then(text => {
+                    // Open the content in a new window
+                    const newWindow = window.open('', '_blank');
+                    newWindow.document.write('<pre>' + text + '</pre>');
+                    newWindow.document.close(); // Close the document to complete loading
+                })
+                .catch(error => console.error('Error fetching text file:', error));
+        }
+    </script>
+</head>
+<body>
+    {% include 'navbar.html' %}
+
+    <h1>File Browser</h1>
+
+    <ul>
+        {% for subfolder in subfolders %}
+        <li><a href="/file_browser/{{ current_folder }}/{{ subfolder }}">{{ subfolder }}</a></li>
+        {% endfor %}
+        
+        <p><br><br></p>
+        
+        {% for item in contents %}
+                <li><a href="" onclick="openTextFile('{{ item }}')">{{ item }}</a></li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

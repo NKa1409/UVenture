@@ -8,10 +8,10 @@
 
     <h1>Upload MZML File</h1>
 
-    <form action="/upload_mzml_file" method="post" enctype="multipart/form-data">
+    <form id="uploadForm" action="/upload_mzml_file" method="post" enctype="multipart/form-data">
         <div class="form-group" style="margin-bottom: 20px;">
             <label for="fileSelect">Select a file:</label>
-            <input type="file" name="file">
+            <input type="file" id="file" name="file">
         </div>
         
         <br>
@@ -67,15 +67,15 @@
         </div>
         <br>
         <div class="form-group">
-            <label for="file_original_project">Original project description:</label>
-            <input type="text" id="file_original_project" name="file_original_project" placeholder="Project description">
+            <label for="file_original_project_description">Original project description:</label>
+            <input type="text" id="file_original_project_description" name="file_original_project_description" placeholder="Project description">
         </div>
         <br>
-
-
-
-        
         <input type="submit" value="Upload">
     </form>
+    <progress id="progressBar" value="0" max="100" style="width:50%;"></progress>
+    <p id="status"></p>
+
+
 </body>
 </html>

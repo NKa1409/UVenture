@@ -2,14 +2,11 @@ import copy
 import traceback
 from functools import lru_cache
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
 import scipy
 import PIL
 import matplotlib
-matplotlib.use('Agg')
 import pathlib
 import time
-import gzip
 
 
 
@@ -296,18 +293,17 @@ def get_mass_spectrum(f, value, mode="as_index", mass_deviation=0.005, requested
         bg_subst_int = do_bg_substraction(xic[1], dur)
         peaks = scipy.signal.find_peaks(bg_subst_int[0], height=max(bg_subst_int[0]) / 10)
         if not save_folder == "":
-            fig = matplotlib.figure.Figure()
-            ax = fig.subplots()
+            fig, ax = plt.subplots()
             ax.plot(xic[0], bg_subst_int[0], label="BG subst. intensity")
             ax.plot(xic[0], xic[1], label="Intensity")
             ax.plot(xic[0], bg_subst_int[1], label="Background")
-            ax.legend()
+            plt.legend()
             ax.set_xlabel("RT / min")
             ax.set_ylabel("intensity / a.u.")
             ax.set_title("XIC of mass " + str(value))
             matplotlib.rcParams.update({'figure.autolayout': True})
             image_filepath = save_folder + "XIC_forMass" + str(index) + ".png"
-            fig.savefig(image_filepath, bbox_inches='tight')
+            plt.savefig(image_filepath, bbox_inches='tight')
 
         if len(peaks[0]) >= 2:
             print(
@@ -398,8 +394,7 @@ def get_mass_spectrum(f, value, mode="as_index", mass_deviation=0.005, requested
     print(rt_list[index])
     print(f[index]["scanList"]["scan"][0]["scan time"])
     if not save_folder == "":
-        fig = matplotlib.figure.Figure()
-        ax = fig.subplots()
+        fig, ax = plt.subplots()
         ax.bar(masses, intensities, label="measured ions")
         try:
             ax.get_legend().remove()
@@ -412,7 +407,7 @@ def get_mass_spectrum(f, value, mode="as_index", mass_deviation=0.005, requested
         matplotlib.rcParams.update({'figure.autolayout': True})
         image_filepath = save_folder + "Mass_spectrum_index" + str(index) + "_" + str(
             filter_mode.replace("/", "")) + "_" + str(ms_ms_masses) + ".png"
-        fig.savefig(image_filepath, bbox_inches='tight')
+        plt.savefig(image_filepath, bbox_inches='tight')
         metadata = PIL.PngImagePlugin.PngInfo()
         metadata.add_text("masses", str(masses))
         metadata.add_text("intensities", str(intensities))
@@ -449,7 +444,7 @@ def get_mass_spectrum(f, value, mode="as_index", mass_deviation=0.005, requested
     return [masses, intensities, index, f[index], f[index]["ms level"], filter, filter_mode, ms_ms_masses]
 
 
-def get_formula_from_cache(cache_folder, mass, max_ppm_dev, max_unlikeliness_of_formula=10, min_unlikelyness_of_formula=0, file_basename="formulas_for_mass_", filetype=".txt.gz", max_mass=1200, remove_unlogical_formulas=False):
+def get_formula_from_cache(cache_folder, mass, max_ppm_dev, file_basename="formulas_for_mass_", filetype=".txt", max_mass=219, remove_unlogical_formulas=False):
     if mass >= max_mass:
         #on the fly prediction
         result = get_one_formula(mass, max_dev=0.005, charge_of_measured_mass=0, dbe_range=(-10, 150), c_oxidation_state_range=(-4, 4),
@@ -491,7 +486,7 @@ def get_formula_from_cache(cache_folder, mass, max_ppm_dev, max_unlikeliness_of_
         all_dict = {}
         for file in files_to_search:
             try:
-                with gzip.open(file, "rt") as f:
+                with open(file, "r") as f:
                     lines = f.readlines()
                     formulas = []
                     deviations = []
@@ -518,31 +513,44 @@ def get_formula_from_cache(cache_folder, mass, max_ppm_dev, max_unlikeliness_of_
     if remove_unlogical_formulas == True:
         for formula in list(all_dict.keys()):
             curr_formula_dict = get_formula_to_dict(formula)
-            curr_unlikelyness_of_formula = 0
-
-
-            if (curr_formula_dict.get("H", 0) + curr_formula_dict.get("Cl", 0) + curr_formula_dict.get("F", 0) + curr_formula_dict.get("Br", 0) + curr_formula_dict.get("I", 0)) > ((curr_formula_dict.get("C", 0) * 3) + (curr_formula_dict.get("N", 0)*2) + (curr_formula_dict.get("O", 0)*1) + (curr_formula_dict.get("S", 0)*2) + (curr_formula_dict.get("P", 0)*2) + 2):
-                curr_unlikelyness_of_formula += 2
-            if curr_formula_dict.get("C", 999)*4 < curr_formula_dict.get("O", 0):
-                curr_unlikelyness_of_formula += 1
-
-            common_atoms = set(curr_formula_dict.keys()).intersection(["Al", "As", "B", "Be", "Ca", "Co", "Cr", "Cu", "Fe", "Ge", "K", "Li", "Mg", "Mn", "Mo", "Na", "Ni", "Sb", "Se", "Si", "Zn"])
-            if len(common_atoms) >= 1:
-                curr_unlikelyness_of_formula += 1
-
-            if curr_formula_dict.get("O", 0) > (curr_formula_dict.get("C", 0)*3 + curr_formula_dict.get("S", 0)*4 + curr_formula_dict.get("N", 0)*2 + curr_formula_dict.get("P", 0)*3 + 2):
-                curr_unlikelyness_of_formula += 1
-
-            if curr_formula_dict.get("P", 0)*3 > curr_formula_dict.get("O", 0):
-                curr_unlikelyness_of_formula += 2
-
-            if curr_formula_dict.get("P", 0) > 2:
-                curr_unlikelyness_of_formula += 2
-
-            if curr_unlikelyness_of_formula >= max_unlikeliness_of_formula or curr_unlikelyness_of_formula < min_unlikelyness_of_formula:
-                print("Unlikelyness of current formula: " + str(curr_unlikelyness_of_formula) + "Formula: " + str(formula))
-                del all_dict[formula]
-
+            try:
+                if ( ("H" in list(curr_formula_dict.keys())) and ("C" in list(curr_formula_dict.keys())) and (not "N" in list(curr_formula_dict.keys())) and (not "O" in list(curr_formula_dict.keys())) ):
+                    if curr_formula_dict["H"] > curr_formula_dict["C"] * 3:
+                        del all_dict[formula]
+                        continue
+                if ( ("H" in list(curr_formula_dict.keys())) and ("C" in list(curr_formula_dict.keys())) and ("N" in list(curr_formula_dict.keys())) and (not "O" in list(curr_formula_dict.keys())) ):
+                    if curr_formula_dict["H"] > curr_formula_dict["C"] * 3 + curr_formula_dict["N"]*2:
+                        del all_dict[formula]
+                        continue
+                if ( ("H" in list(curr_formula_dict.keys())) and ("C" in list(curr_formula_dict.keys())) and ("N" in list(curr_formula_dict.keys())) and ("O" in list(curr_formula_dict.keys())) ):
+                    if curr_formula_dict["H"] > curr_formula_dict["C"] * 3 + curr_formula_dict["N"]*2 + curr_formula_dict["O"]:
+                        del all_dict[formula]
+                        continue
+                if ( ("H" in list(curr_formula_dict.keys())) and ("C" in list(curr_formula_dict.keys())) and (not "N" in list(curr_formula_dict.keys())) and ("O" in list(curr_formula_dict.keys())) ):
+                    if curr_formula_dict["H"] > curr_formula_dict["C"] * 3 + curr_formula_dict["O"]:
+                        del all_dict[formula]
+                        continue
+                if ("C" in list(curr_formula_dict.keys()) and "O" in list(curr_formula_dict.keys()) and (not "N" in list(curr_formula_dict.keys())) and (not "S" in list(curr_formula_dict.keys())) ):
+                    if curr_formula_dict["C"]*4 < (curr_formula_dict["O"]):
+                        del all_dict[formula]
+                        continue
+                if ( ("C" in list(curr_formula_dict.keys())) and ("O" in list(curr_formula_dict.keys())) and ("S" in list(curr_formula_dict.keys())) and (not "N" in list(curr_formula_dict.keys()))):
+                    if curr_formula_dict["C"]*3 + curr_formula_dict["S"]*4 < (curr_formula_dict["O"]):
+                        del all_dict[formula]
+                        continue
+                if (("C" in list(curr_formula_dict.keys())) and ("O" in list(curr_formula_dict.keys())) and ("S" in list(curr_formula_dict.keys())) and ("N" in list(curr_formula_dict.keys()))):
+                    if curr_formula_dict["C"] * 3 + curr_formula_dict["S"] * 4 + curr_formula_dict["N"]*2 <= (curr_formula_dict["O"]):
+                        del all_dict[formula]
+                        continue
+                if ("P" in list(curr_formula_dict.keys())) and (not "O" in list(curr_formula_dict.keys())):
+                    del all_dict[formula]
+                    continue
+                if ("P" in list(curr_formula_dict.keys()) and "O" in list(curr_formula_dict.keys())):
+                    if (curr_formula_dict["P"] > curr_formula_dict["O"]/3):
+                        del all_dict[formula]
+                        continue
+            except:
+                pass
     return [mass, all_dict]
 
 
@@ -928,7 +936,7 @@ def calc_dbe(formula):
             formula = get_formula_to_dict(formula)
         if isinstance(formula, dict):
             pass
-        dbe = ((formula.get("Si", 0) * 2) + (formula.get("C", 0)*2) + 2 + formula.get("N", 0) + formula.get("P", 0) - formula.get("H", 0) - formula.get("F", 0) - formula.get("Cl", 0) - formula.get("Br", 0) - formula.get("I", 0) ) / 2
+        dbe = ((formula.get("C", 0)*2) + 2 + formula.get("N", 0) - formula.get("H", 0) - formula.get("F", 0) - formula.get("Cl", 0) - formula.get("Br", 0) - formula.get("I", 0) ) / 2
         return dbe
     except Exception as e:
         print("Error calculating DBE in MS_functions: " + str(e))
@@ -960,8 +968,7 @@ if __name__ == "__main__":
     starttime = time.time()
     xic = get_xic(f, mass=138.0191, mass_deviation=.001, requested_filter_mode="Full scan", starttime=starttime)
     print("Time: " + str(time.time()-starttime))
-    fig = matplotlib.figure.Figure()
-    ax = fig.subplots()
+    fig, ax = plt.subplots()
     ax.plot(xic[0], xic[1])
     print("Time: " + str(time.time()-starttime))
     plt.show()
@@ -984,8 +991,7 @@ if __name__ == "__main__":
     # only those indices where a full scan was measured are plotted.
     # So the original index of each datapoint is also given
     xic = get_xic(f, mass=138.0191, mass_deviation=.001, requested_filter_mode="Full scan")
-    fig = matplotlib.figure.Figure()
-    ax = fig.subplots()
+    fig, ax = plt.subplots()
     ax.plot(xic[0], xic[1])
     plt.show()
 #######################################################################################################################
@@ -1006,8 +1012,7 @@ if __name__ == "__main__":
     # if save_folder="path_to_folder//" a logfile and a plot of the spectrum will be saved there.
 
     spec = get_mass_spectrum(f, 138.0191, mode="as_mass", mass_deviation=0.005, requested_filter_mode="Full scan")
-    fig = matplotlib.figure.Figure()
-    ax = fig.subplots()
+    fig, ax = plt.subplots()
     ax.bar(spec[0], spec[1])
     plt.show()
 #######################################################################################################################
