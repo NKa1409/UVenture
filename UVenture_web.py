@@ -4,6 +4,8 @@ import datetime
 import io
 import os
 import shutil
+import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -16,6 +18,18 @@ import werkzeug
 import UVenture
 import MS_functions
 import multiprocessing
+import psutil
+
+
+def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
+    try:
+        ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile)
+        myanalysis = UVenture.OneAnalysis(ms_file, mz, rt, **settings_dict)
+        return
+    except Exception as e:
+        print(e)
+        print(traceback.format_exc())
+        return
 
 
 class Webpage:
@@ -44,29 +58,7 @@ class Webpage:
         
         @self.app.route("/queue_new_analysis", methods=["GET", "POST"])
         def queue_new_analysis():
-            settings_dict = {}
-            with open(self.settings_file_filepath, "r") as f:
-                file_contents_raw = f.read()
-                lines = file_contents_raw.split("\n")
-                for line in lines:
-                    line = line.strip()
-                    if not "=" in line:
-                        continue
-                    if line[0] == "#":
-                        continue
-                    key, value = line.split("=")
-                    try:
-                        value = float(value)
-                    except:
-                        try:
-                            value = int(value)
-                        except:
-                            try:
-                                value = ast.literal_eval(value)
-                            except:
-                                value = str(value)
-                    settings_dict[key] = value
-
+            settings_dict = self.get_settings_dict()
             if flask.request.method == "POST":
                 form_data = flask.request.form.to_dict()
                 if not "peak_analysis_cb" in form_data:
@@ -75,6 +67,8 @@ class Webpage:
                     form_data["mass_analysis_cb"] = "false"
                 if not "peak_analysis_list_cb" in form_data:
                     form_data["peak_analysis_list_cb"] = "false"
+                if form_data["peak_analysis_cb"] == "false" and form_data["mass_analysis_cb"] == "false" and form_data["peak_analysis_list_cb"] == "false":
+                    return flask.render_template_string("No analysis mode chosen. \n Please tick the box of the analysis that you want to perform.")
                 print(form_data)
                 keys_to_check = ["mz_peak_analysis", "mz_mass_analysis", "retention_time"]
                 for k in keys_to_check:
@@ -90,21 +84,15 @@ class Webpage:
                 print("MS file loaded")
                 if form_data["peak_analysis_cb"] == "true":
                     if form_data["mz_peak_analysis"] == "":
-                        return flask.render_template_string("No m/z given! Cannot analyze peak without a mass. \n Please enter a peak to analyse")
+                        return flask.render_template_string("No m/z given! Cannot analyze peak without a mass. \n Please enter a peak to analyse.")
                     if form_data["retention_time"] == "":
-                        return flask.render_template_string("No retention time given! Cannot analyze peak without retention time. \nPlease enter a retention time")
+                        return flask.render_template_string("No retention time given! Cannot analyze peak without retention time. \nPlease enter a retention time.")
                     try:
-                        def run_one_analysis():
-                            try:
-                                ms_filepath = self.mzml_folder + form_data["fileselection"]
-                                ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/")
-                                myanalysis = UVenture.OneAnalysis(ms_file, form_data["mz_peak_analysis"], form_data["retention_time"], **settings_dict)
-                            except Exception as e:
-                                print(e)
-                                print(traceback.format_exc())                        
-                        thread_name = "UVenture_OneAnalysis_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_file_" + str(form_data["fileselection"]) + "_mass_" + str(form_data["mz_peak_analysis"]) + "_rt_" + str(form_data["retention_time"])
-                        thread = threading.Thread(target=run_one_analysis, name=thread_name)
-                        thread.start()
+                        self.start_one_oa(self.mzml_folder + form_data["fileselection"],
+                                          mz=form_data["mz_peak_analysis"],
+                                          rt=form_data["retention_time"],
+                                          settings_dict=settings_dict,
+                                          parentfolder_msfile=self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/")
                         all_threads = threading.enumerate()
                         running_threads = [t.name for t in all_threads if t.is_alive()]
                         running_processes = [p.name for p in multiprocessing.active_children()]
@@ -114,7 +102,7 @@ class Webpage:
                     except Exception as e:
                         print(e)
                         print(traceback.format_exc())
-                        return flask.render_template_string("An error occured during the analysis" + str(e) + "\n \n \n" + str(traceback.format_exc()))
+                        return flask.render_template_string("An error occured during the analysis: " + str(e) + "\n \n \n" + str(traceback.format_exc()))
                     print("Peak analysis started")
 
                 if form_data["mass_analysis_cb"] == "true":
@@ -145,35 +133,58 @@ class Webpage:
                         peak_list_file = io.StringIO(peak_list_file.read().decode("utf-8"))
                         print(peak_list_file)
                     else:
-                        return flask.render_template_string("No peak list given! Cannot analyze peaks without a list. \n Please enter a peak list to analyse")
-
-                    def create_task(lines):
-                        for line in lines:
-                            line.strip()
-                            print(line)
-                            ms_filepath = self.mzml_folder + form_data["fileselection"]
-                            mz, rt = line.split("\t")
-                            try:
-                                mz = float(mz)
-                                rt = float(rt)
-                                run_one_analysis(ms_filepath, mz, rt)
-                            except:
-                                continue
-
-
-                    def run_one_analysis(ms_filepath, mz, retention_time):
-                            try:
-                                ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/")
-                                myanalysis = UVenture.OneAnalysis(ms_file, mz, retention_time, **settings_dict)
-                                return
-                            except Exception as e:
-                                print(e)
-                                print(traceback.format_exc())
-                                return
+                        return flask.render_template_string("No peak list given! Cannot analyze peaks without a list. \n Please enter a peak list to analyse.")
 
                     lines = peak_list_file.readlines()
                     print(lines)
 
+                    def create_task(lines):
+                        core_count = os.cpu_count()
+                        core_count = 6
+
+                        ms_filepath = self.mzml_folder + form_data["fileselection"]
+                        parentfolder_msfile = self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/"
+
+                        for line in lines:
+                            line.strip()
+                            print(line)
+                            mz, rt = line.split("\t")
+                            try:
+                                mz = float(mz)
+                                rt = float(rt)
+                            except:
+                                continue
+
+                            all_threads = threading.enumerate()
+                            running_threads = [t.name for t in all_threads if t.is_alive()]
+                            running_processes = [p.name for p in multiprocessing.active_children()]
+                            running_analyses = running_threads + running_processes
+                            running_analyses = [a for a in running_analyses if "UVenture_" in a]
+                            print("Running analyses: " + str(running_analyses))
+
+                            while len(running_analyses) >= core_count:
+                                all_threads = threading.enumerate()
+                                running_threads = [t.name for t in all_threads if t.is_alive()]
+                                running_processes = [p.name for p in multiprocessing.active_children()]
+                                running_analyses = running_threads + running_processes
+                                running_analyses = [a for a in running_analyses if "UVenture_" in a]
+                                time.sleep(1)
+
+                            try:
+                                print("scheduling")
+                                self.start_one_oa(ms_filepath,
+                                                  mz,
+                                                  rt,
+                                                  settings_dict,
+                                                  parentfolder_msfile)
+                                print("Scheduled new one analysis")
+                            except Exception as e:
+                                print(e)
+                                print(traceback.format_exc())
+                                continue
+
+
+                    #create_task(lines)
                     thread_name = "UVenture_ListAnalysis_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_AnalysisList_" + str(form_data["fileselection"]) + "WHOLELIST"
                     thread = threading.Thread(target=create_task, args=[lines], name=thread_name)
                     thread.start()
@@ -246,10 +257,14 @@ class Webpage:
         @self.app.route("/show_currently_running", methods=["GET", "POST"])
         def show_currently_running():
             all_threads = threading.enumerate()
+            running_threads = [t.name for t in all_threads if t.is_alive()]
+            running_processes = [p.name for p in multiprocessing.active_children()]
+            running_analyses = running_threads + running_processes
+            running_analyses = [a for a in running_analyses if "UVenture_" in a]
+
             tasks_information = []
-            for task in all_threads:
-                if task.name.startswith("UVenture_"):
-                    tasks_information.append({"name": task.name, "is_alive": task.is_alive()})
+            for task in running_analyses:
+                tasks_information.append({"name": task, "is_alive": True})
             tasks_information.sort(key=lambda x: x["name"])
             tasks_information.append({"name": "█████████████████████████████████████████████████████████████████████", "is_alive": True})
             for task in all_threads:
@@ -478,6 +493,55 @@ class Webpage:
         if self.thread is not None:
             self.thread.join()
         print("Webpage object deleted and server stopped")
+
+    def get_settings_dict(self):
+        settings_dict = {}
+        with open(self.settings_file_filepath, "r") as f:
+            file_contents_raw = f.read()
+            lines = file_contents_raw.split("\n")
+            for line in lines:
+                line = line.strip()
+                if not "=" in line:
+                    continue
+                if line[0] == "#":
+                    continue
+                key, value = line.split("=")
+                try:
+                    value = float(value)
+                except:
+                    try:
+                        value = int(value)
+                    except:
+                        try:
+                            value = ast.literal_eval(value)
+                        except:
+                            value = str(value)
+                settings_dict[key] = value
+        return settings_dict
+
+
+    def start_one_oa_thread(self, ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
+        mz = float(mz)
+        rt = float(rt)
+        def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
+            try:
+                ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile)
+                myanalysis = UVenture.OneAnalysis(ms_file, mz, rt, **settings_dict)
+                return
+            except Exception as e:
+                print(e)
+                print(traceback.format_exc())
+                return
+        thread_name = ("UVenture_OA_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_MZ_" + str(mz) + "_RT_" + str(rt))
+        thread = threading.Thread(target=caller_func, args=[ms_filepath, mz, rt, settings_dict, parentfolder_msfile], name=thread_name)
+        thread.start()
+
+    def start_one_oa(self, ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
+        mz = float(mz)
+        rt = float(rt)
+        thread_name = ("UVenture_OA_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_MZ_" + str(mz) + "_RT_" + str(rt))
+        thread = multiprocessing.Process(target=caller_func, args=[ms_filepath, mz, rt, settings_dict, parentfolder_msfile], name=thread_name)
+        thread.start()
 
 
 

@@ -1,4 +1,5 @@
 import copy
+import sys
 import traceback
 from functools import lru_cache
 import matplotlib.pyplot as plt
@@ -21,7 +22,7 @@ def read_mzml_file(mzml_filename):
     return f
 
 
-def get_xic(f, mass, mass_deviation, requested_filter_mode="Full scan", starttime=0):
+def get_xic(f, mass, mass_deviation, requested_filter_mode="Full scan"):
     if (not requested_filter_mode == "Full scan") and (not requested_filter_mode == "AIF") and (not requested_filter_mode == "MS/MS"):
         requested_filter_mode = "Full scan"
     rt_list = []
@@ -713,9 +714,12 @@ def get_one_formula(measured_mass, max_dev=0.005, charge_of_measured_mass=-1, db
     return [mass, formulas]
 
 
+
+
+##NOT WORKING PROPERLY. USE summarize_mass_intensity_dict INSTEAD
 def summarize_mass_intensity_dict_with_deviation(dictio, deviation=20, noise=5000):
     print(len(dictio))
-    dictio = {k: v for k, v in dictio.items() if v >= 1}
+    dictio = {k: v for k, v in dictio.items() if v >= 0.00001}
     old_masses_list = list(dictio.keys())
     old_abundances_list = list(dictio.values())
     new_masses_list = []
@@ -807,6 +811,81 @@ def do_bg_substraction(y, not_including_peak_width_multiplier=3, peakwidth=10):
     return [bg_subst_series, background, peaks, peak_properties]
 
 
+def summarize_mass_intensity_dict(dictio, deviation=30):
+    dictio = dict(sorted(dictio.items(), key=lambda item: item[0]))
+    old_masses_list = list(dictio.keys())
+    old_abundances_list = list(dictio.values())
+    new_masses_list = []
+    new_abundances_list = []
+
+    while len(old_masses_list) > 0:
+        try:
+            remove_all_lower = False
+            remove_all_upper = False
+            index_of_highest_abundance = old_abundances_list.index(max(old_abundances_list))
+            curr_mass = old_masses_list[index_of_highest_abundance]
+            mass_lower_border = curr_mass - ((deviation * curr_mass) / 1000000)
+            mass_upper_border = curr_mass + ((deviation * curr_mass) / 1000000)
+
+            iteration_step_lower = 0
+            iteration_step_upper = 0
+
+            try:
+                while (mass_lower_border < old_masses_list[index_of_highest_abundance - (iteration_step_lower + 1)]):
+                    iteration_step_lower += 1
+            except IndexError:
+                remove_all_lower = True
+                iteration_step_lower = 0
+
+            try:
+                while (mass_upper_border > old_masses_list[index_of_highest_abundance + iteration_step_upper + 1]):
+                    iteration_step_upper += 1
+            except IndexError:
+                remove_all_upper = True
+                iteration_step_upper = 0
+
+            if remove_all_lower == True and remove_all_upper == True:
+                break
+            if remove_all_upper:
+                summed_intensity = sum([old_abundances_list[i] for i in range(index_of_highest_abundance - iteration_step_lower, len(old_abundances_list), 1)])
+                weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(index_of_highest_abundance - iteration_step_lower, len(old_abundances_list), 1)]) / summed_intensity
+                new_masses_list.append(weighted_mass_average)
+                new_abundances_list.append(summed_intensity)
+                old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(index_of_highest_abundance - iteration_step_lower, len(old_masses_list), 1)]
+                old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(index_of_highest_abundance - iteration_step_lower, len(old_abundances_list), 1)]
+                continue
+            if remove_all_lower:
+                summed_intensity = sum([old_abundances_list[i] for i in range(0, index_of_highest_abundance + iteration_step_upper + 1, 1)])
+                weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(0, index_of_highest_abundance + iteration_step_upper + 1, 1)]) / summed_intensity
+                new_masses_list.append(weighted_mass_average)
+                new_abundances_list.append(summed_intensity)
+                old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(0, index_of_highest_abundance + iteration_step_upper + 1, 1)]
+                old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(0, index_of_highest_abundance + iteration_step_upper + 1, 1)]
+                continue
+
+            if iteration_step_lower == 0 and iteration_step_upper == 0:
+                summed_intensity = old_abundances_list[index_of_highest_abundance]
+                weighted_mass_average = old_masses_list[index_of_highest_abundance]
+                new_masses_list.append(weighted_mass_average)
+                new_abundances_list.append(summed_intensity)
+                old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if not i == index_of_highest_abundance]
+                old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if not i == index_of_highest_abundance]
+                continue
+
+            summed_intensity = sum([old_abundances_list[i] for i in range(index_of_highest_abundance - iteration_step_lower, index_of_highest_abundance + iteration_step_upper + 1, 1)])
+            weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(index_of_highest_abundance - iteration_step_lower, index_of_highest_abundance + iteration_step_upper + 1, 1)]) / summed_intensity
+            new_masses_list.append(weighted_mass_average)
+            new_abundances_list.append(summed_intensity)
+            old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(index_of_highest_abundance - iteration_step_lower, index_of_highest_abundance + iteration_step_upper + 1, 1)]
+            old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(index_of_highest_abundance - iteration_step_lower, index_of_highest_abundance + iteration_step_upper + 1, 1)]
+        except Exception as e:
+            print("EXCEPTION IN summarize_mass_intensity_dict()!!!")
+            print(traceback.format_exc())
+            print(e)
+            break
+    outdict = dict(zip(new_masses_list, new_abundances_list))
+    return outdict
+
 def simulate_isotope_pattern_of_formula(formula, mass_resolution_ppm=10):
     if len(formula) == 0:
         return None
@@ -822,40 +901,12 @@ def simulate_isotope_pattern_of_formula(formula, mass_resolution_ppm=10):
     for entry in isotopologues_list:
         abundance_dict[pyteomics.mass.mass.calculate_mass(entry)] = pyteomics.mass.mass.isotopic_composition_abundance(entry)
     abundance_dict = {m: a for m, a in abundance_dict.items() if a > 0.0001}
-    masses_list = []
-    abundances_list = []
-    for entry in list(abundance_dict.items()):
-        masses_list.append(entry[0])
-        abundances_list.append(entry[1])
-    new_masses_list = []
-    new_abundances_list = []
-    old_masses_list = copy.deepcopy(masses_list)
-    old_abundances_list = copy.deepcopy(abundances_list)
-    for entry in range(len(masses_list)):
-        try:
-            mass_dev_list = [abs(((m-old_masses_list[entry])/old_masses_list[entry])*1000000) for m in old_masses_list]
-            curr_mass_plus_deviation_list = [old_masses_list[m] for m in range(len(old_masses_list)) if mass_dev_list[m] <= mass_resolution_ppm]
-            curr_abundance_plus_deviation_list = [old_abundances_list[m] for m in range(len(old_masses_list)) if mass_dev_list[m] <= mass_resolution_ppm]
-
-            if not curr_mass_plus_deviation_list[curr_abundance_plus_deviation_list.index(max(curr_abundance_plus_deviation_list))] in new_masses_list:
-                new_masses_list.append(curr_mass_plus_deviation_list[curr_abundance_plus_deviation_list.index(max(curr_abundance_plus_deviation_list))])
-                new_abundances_list.append(sum(curr_abundance_plus_deviation_list))
-
-            # indices_list = [masses_list.index(m) for m in curr_mass_plus_deviation_list]
-            #
-            # for i in range(len(masses_list)-1, -1, -1):
-            #     if i in indices_list:
-            #         del masses_list[i]
-            #         del abundances_list[i]
-            #     print(masses_list)
-            # print(curr_mass_plus_deviation_list)
-        except Exception as e:
-            print("EXCEPTION IN simulate_isotope_pattern_of_formula()!!!")
-            print(e)
-            break
-    sorted_masses_according_to_abundance = [m for _,m in sorted(zip(new_abundances_list, new_masses_list), reverse=True)]
-    sorted_abundance_list = sorted(new_abundances_list, reverse=True)
-    abundance_dict = dict(zip(sorted_masses_according_to_abundance, sorted_abundance_list))
+    print(abundance_dict)
+    try:
+        abundance_dict = summarize_mass_intensity_dict(abundance_dict, deviation=mass_resolution_ppm)
+    except Exception as e:
+        print("EXCEPTION IN simulate_isotope_pattern_of_formula()!!!")
+        print(e)
     return abundance_dict
 
 
@@ -938,6 +989,35 @@ def calc_dbe(formula):
 
 
 if __name__ == "__main__":
+    pattern = simulate_isotope_pattern_of_formula("C3H11N1O1S2Br1")
+    print(pattern)
+    sys.exit()
+
+
+################################################################################################################
+
+    dictio = {221.94504457713: 0.4669847312210661,
+              219.94709107713: 0.43961483934980194,
+              223.94084047713: 0.03914717156374999,
+              222.94839941493: 0.015152339909224929,
+              220.95044591493001: 0.014264263967581771,
+              222.94443233713: 0.00834003332386434,
+              220.94647883713: 0.006942017675804853,
+              222.94207947053: 0.002016631029850584,
+              220.94412597053: 0.0016060440154495154,
+              224.94419531493: 0.001241661217539753,
+              221.95133745757: 0.001128654627464162,
+              223.94929095756999: 0.0010979277901017523,
+              225.93663637713001: 0.0008560657853599821,
+              224.94022823713: 0.00030214086542117006,
+              221.95380075273002: 0.0001542784033691751,
+              223.95175425273: 0.00015007828112318058,
+              224.93787537052998: 0.00013980129449213708}
+
+    print(summarize_mass_intensity_dict(dictio))
+
+    sys.exit()
+
 
 
     # start_time1 = time.time()

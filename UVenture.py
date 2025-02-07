@@ -2,64 +2,135 @@ import ast
 import copy
 import datetime
 import math
-import pathlib
-import sys
 import traceback
 import PIL
-from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.gridspec
 import numpy as np
-import psutil
 import scipy
 import MS_functions
-import pyteomics
-import flask
-import time
-import threading
-import werkzeug
 import os
 from pyteomics import mzml
 import similaritymeasures
-
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-
 import shutil
 
 DPI = 300
 
 
-class MS_File:
-    def __init__(self, filename, **kwargs):
-        if "parentfolder_msfile" in kwargs:
-            parentfolder = kwargs["parentfolder_msfile"]
-        else:
-            parentfolder = str(".".join(filename.split(".")[:-1]) + "/")
-        default_kwargs = {"parentfolder_msfile":parentfolder,
-                          "logfile_filepath":parentfolder + "MSfile_logfile.txt" }
-        kwargs = {**default_kwargs, **kwargs}
-        os.makedirs(kwargs["parentfolder_msfile"], exist_ok=True)
+def run_one_analysis(ms_filepath, mz, retention_time, settings_filepath, parentfolder_msfile):
+    print("starting one analysis UVenture")
+    settings_dict = {}
+    with open(settings_filepath, "r") as f:
+        file_contents_raw = f.read()
+        lines = file_contents_raw.split("\n")
+        for line in lines:
+            line = line.strip()
+            if not "=" in line:
+                continue
+            if line[0] == "#":
+                continue
+            key, value = line.split("=")
+            try:
+                value = float(value)
+            except:
+                try:
+                    value = int(value)
+                except:
+                    try:
+                        value = ast.literal_eval(value)
+                    except:
+                        value = str(value)
+            settings_dict[key] = value
+    print(settings_dict)
+    retention_time = float(retention_time)
+    mz = float(mz)
+    try:
+        ms_file = MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile)
+        myanalysis = OneAnalysis(ms_file, mz, retention_time, **settings_dict)
+        return
+    except Exception as e:
+        print(e)
+        print(traceback.format_exc())
+        return
 
-        self.parentfolder = kwargs["parentfolder_msfile"]
+
+
+
+class MS_File:
+    def __init__(self, filename=None, **kwargs):
+        if filename == None:
+            print("No filename given. Read a txt file with the spectrum to fill this object with MS data.")
+            print("MS_File.read_txt(filename)")
+            self.parentfolder = None
+            self.filename = None
+            self.file = None
+            self.rawdata = None
+            self.method_duration = None
+            self.rt_list = None
+            self.all_filters = None
+            self.all_modes = None
+            self.tic = None
+            self.available_modes = None
+        else:
+            if "parentfolder_msfile" in kwargs:
+                parentfolder = kwargs["parentfolder_msfile"]
+            else:
+                parentfolder = str(".".join(filename.split(".")[:-1]) + "/")
+            default_kwargs = {"parentfolder_msfile": parentfolder,
+                              "logfile_filepath": parentfolder + "MSfile_logfile.txt"}
+            kwargs = {**default_kwargs, **kwargs}
+            os.makedirs(kwargs["parentfolder_msfile"], exist_ok=True)
+
+            self.parentfolder = kwargs["parentfolder_msfile"]
+
+            self.filename = filename
+            self.file = mzml.read(self.filename)
+            self.rawdata = list(self.file)
+            self.method_duration = self.rawdata[-1]["scanList"]["scan"][0]["scan time"]
+            self.rt_list = [element["scanList"]["scan"][0]["scan time"] for element in self.rawdata]
+            self.all_filters = []
+            self.all_modes = []
+            self.tic = []
+            self.available_modes = []
+
+            for index in range(len(self.rawdata)):
+                self.tic.append(self.rawdata[index]["total ion current"])
+                self.all_filters.append(self.rawdata[index]["scanList"]["scan"][0]["filter string"])
+            for filter_string in self.all_filters:
+                if " d " in filter_string and "@hcd" in filter_string:
+                    self.available_modes.append("MS/MS")
+                elif " d " not in filter_string and "hcd" not in filter_string:
+                    self.available_modes.append("Full scan")
+                elif " d " not in filter_string and "hcd" in filter_string:
+                    self.available_modes.append("AIF")
+            self.all_modes = self.available_modes
+            self.available_modes = list(set(self.available_modes))
+
+    def save_txt(self, filename):
+        with open(filename, "w") as f:
+            f.write(str(self.rawdata))
+        return True
+
+    def read_txt(self, filename):
+        with open(filename, "r") as f:
+            rawdata = f.read()
+            rawdata = ast.literal_eval(rawdata)
+        self.parentfolder = str(".".join(filename.split(".")[:-1]) + "/")
+        os.makedirs(self.parentfolder, exist_ok=True)
+        self.rawdata = rawdata
         self.filename = filename
-        self.file = mzml.read(self.filename)
-        self.rawdata = list(self.file)
+        self.file = "NA as file was read as .txt"
         self.method_duration = self.rawdata[-1]["scanList"]["scan"][0]["scan time"]
         self.rt_list = [element["scanList"]["scan"][0]["scan time"] for element in self.rawdata]
-        self.all_ms_spectra = []
         self.all_filters = []
         self.all_modes = []
         self.tic = []
         self.available_modes = []
-
         for index in range(len(self.rawdata)):
-            masses = list(self.rawdata[index]["m/z array"])
-            intensities = list(self.rawdata[index]["intensity array"])
-            mass_intensity_dict = dict(zip(masses, intensities))
-            self.all_ms_spectra.append(mass_intensity_dict)
             self.tic.append(self.rawdata[index]["total ion current"])
             self.all_filters.append(self.rawdata[index]["scanList"]["scan"][0]["filter string"])
         for filter_string in self.all_filters:
@@ -71,7 +142,7 @@ class MS_File:
                 self.available_modes.append("AIF")
         self.all_modes = self.available_modes
         self.available_modes = list(set(self.available_modes))
-        
+
 
 class Spec:
     def __init__(self, ms_file, index, **kwargs):
@@ -100,11 +171,8 @@ class Spec:
             print(kwargs["absolute_spec_folder"])
 
         self.rt = self.ms_file.rt_list[self.index]
-        self.masses = []
         self.summarized_masses = []
-        self.intensities = []
         self.summarized_intensities = []
-        self.mass_intensity_dict = {}
         self.summarized_mass_intensity_dict = {}
         self.filter = None
         self.filter_mode = None
@@ -138,13 +206,13 @@ class Spec:
         self.make_spec_log_entry("INFO:\t" + "Saving plot?: " + str(self.kwargs["spec_save_matplotlib_plot"]))
 
         print("Getting mass spec...")
-        self.mass_intensity_dict = self.get_mass_spec(self.index)
-        print("Got mass spec")
         print("Summarizing mass intensity dict...")
-        self.summarized_mass_intensity_dict = self.summarize_mass_intensity_dict_with_deviation(dict(zip(self.masses, self.intensities)), deviation=self.kwargs["mass_deviation"])
+        print("Length of mass intensity dict: " + str(len(list(self.ms_file.rawdata[index]["m/z array"]))))
+        self.summarized_mass_intensity_dict = self.summarize_mass_intensity_dict_with_deviation(self.get_mass_spec(self.index), deviation=self.kwargs["mass_deviation"])
+        print("Got mass spec")
         self.summarized_masses = list(self.summarized_mass_intensity_dict.keys())
         self.summarized_intensities = list(self.summarized_mass_intensity_dict.values())
-        print("Summarized mass intensity dict shortened from: " + str(len(self.mass_intensity_dict)) + " to: " + str(len(self.summarized_mass_intensity_dict)) + " elements.")
+        print("Summarized mass intensity dict shortened to: " + str(len(self.summarized_mass_intensity_dict)) + " elements.")
         self.make_spec_log_entry("Summarized_mass_intensity_dict: ")
         self.make_spec_log_entry(str(self.summarized_mass_intensity_dict))
 
@@ -233,11 +301,9 @@ class Spec:
                     while (mass_upper_border > old_masses_list[index_of_highest_abundance+integration_step_upper+1]) and \
                             (old_masses_list[index_of_highest_abundance+integration_step_upper+1] - last_existing_mass_within_border <= 3.2*expected_min_spacing_between_measurement_points) and \
                                 (old_abundances_list[index_of_highest_abundance+integration_step_upper+1] <= (1.1 * last_abundance)):
-
                         integration_step_upper += 1
                         last_existing_mass_within_border = old_masses_list[index_of_highest_abundance + integration_step_upper]
                         last_abundance = old_abundances_list[index_of_highest_abundance + integration_step_upper]
-
                 except IndexError:
                     remove_all_upper = True
                     integration_step_upper = 0
@@ -247,7 +313,7 @@ class Spec:
                 if remove_all_upper:
                     summed_intensity = sum([old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, len(old_abundances_list), 1)])
                     weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, len(old_abundances_list), 1)]) / summed_intensity
-                    if summed_intensity >= 500:
+                    if summed_intensity >= 1:
                         new_masses_list.append(weighted_mass_average)
                         new_abundances_list.append(summed_intensity)
                     old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, len(old_masses_list), 1)]
@@ -256,7 +322,7 @@ class Spec:
                 if remove_all_lower:
                     summed_intensity = sum([old_abundances_list[i] for i in range(0, index_of_highest_abundance+integration_step_upper+1, 1)])
                     weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(0, index_of_highest_abundance+integration_step_upper+1, 1)]) / summed_intensity
-                    if summed_intensity >= 200:
+                    if summed_intensity >= 1:
                         new_masses_list.append(weighted_mass_average)
                         new_abundances_list.append(summed_intensity)
                     old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(0, index_of_highest_abundance+integration_step_upper+1, 1)]
@@ -266,7 +332,7 @@ class Spec:
                 if iteration_step_lower == 0 and integration_step_upper == 0:
                     summed_intensity = old_abundances_list[index_of_highest_abundance]
                     weighted_mass_average = old_masses_list[index_of_highest_abundance]
-                    if summed_intensity >= 500:
+                    if summed_intensity >= 1:
                         new_masses_list.append(weighted_mass_average)
                         new_abundances_list.append(summed_intensity)
                     old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if not i == index_of_highest_abundance ]
@@ -275,7 +341,7 @@ class Spec:
 
                 summed_intensity = sum([old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper+1, 1)])
                 weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper+1, 1)]) / summed_intensity
-                if summed_intensity >= 500:
+                if summed_intensity >= 1:
                     new_masses_list.append(weighted_mass_average)
                     new_abundances_list.append(summed_intensity)
                 old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper+1, 1)]
@@ -434,8 +500,6 @@ class Spec:
         for element in filter_parsed:
             ms_ms_masses.append((float(element.split("@")[0])))
 
-        self.masses = masses
-        self.intensities = intensities
         self.filter = filter
         self.filter_mode = filter_mode
         self.ms_ms_masses = ms_ms_masses
@@ -461,7 +525,7 @@ class Prediction:
 
         self.spec_before = spec_before
         self.spec_after = spec_after
-
+        print("Starting prediction class")
         if "prediction_subfolder" in kwargs:
             pred_folder = self.ms_file.parentfolder + "/predictions/" + kwargs["prediction_subfolder"]
         else:
@@ -489,7 +553,7 @@ class Prediction:
                           "pred_add_value_to_score_if_isotopo_was_found":250,
                           "pred_isotopologue_score_e_function_exponent":0.4,
                           "pred_multiplier_isotopologue_influence_of_ppm_deviation_on_score":30,
-                          "pred_multiplier_isotopologue_influence_of_too_little_intensity_on_score": 100,
+                          "pred_ratio_influence_ppm_deviation_vs_intensity": 0.5,
                           "pred_stop_isotopologue_search_if_score_lower_than":-80,
                           "pred_ppm_deviation_score_multiplier":14,
                           "pred_include_likelyhood_of_formula":True,
@@ -503,7 +567,9 @@ class Prediction:
         self.kwargs = {**default_kwargs, **kwargs}
         os.makedirs(self.kwargs["pred_folder"], exist_ok=True)
 
-        self.intensity_of_ion = sum([self.spec.intensities[i] for i in range(len(self.spec.masses)) if abs(((self.spec.masses[i] - self.mass)/self.mass)*1000000) <= self.kwargs["mass_deviation"]])
+
+        self.intensity_of_ion = self.spec.summarized_mass_intensity_dict[self.mass]
+        #self.intensity_of_ion = sum([self.spec.summarized_intensities[i] for i in range(len(self.spec.summarized_masses)) if abs(((self.spec.summarized_masses[i] - self.mass)/self.mass)*1000000) <= self.kwargs["mass_deviation"]])
         self.make_op_log_entry("")
         self.make_op_log_entry("=============================================================")
         self.make_op_log_entry("=============================================================")
@@ -511,13 +577,14 @@ class Prediction:
         self.make_op_log_entry("INFO:\t" + "Creating prediction object for mass: " + str(self.mass) + " at retention time: " + str(self.rt) + " at index: " + str(self.spec.index))    
         self.make_op_log_entry("INFO:\t" + "Intensity of the molecular ion: " + str(self.intensity_of_ion))
         self.make_op_log_entry("INFO:\t" + "Assuming a mass deviation of: " + str(self.kwargs["mass_deviation"]))
-
+        print("Intensity of ion for prediction: " + str(self.intensity_of_ion))
         self.xic = MS_functions.get_xic(self.ms_file.rawdata, self.mass, ((self.kwargs["mass_deviation"]*self.mass)/1000000), requested_filter_mode=self.spec.filter_mode)
         self.make_op_log_entry("INFO:\t" + "XIC calculated.")
         self.identified_peaks_for_mass = self.get_peak_properties(self.xic[0], self.xic[1])
         self.make_op_log_entry("INFO:\t" + "Identified peaks in XIC.")
         self.prediction_spec_within_peak_range = self.check_if_provided_spectrum_within_peak_range(self.spec.index, self.identified_peaks_for_mass)
         self.make_op_log_entry("INFO:\t" + "Checked if the provided spectrum is within the peak range of the XIC. Result: " + str(self.prediction_spec_within_peak_range))
+
         if not self.prediction_spec_within_peak_range:
             self.peak_found = False
             self.make_op_log_entry("WARNING:\t" + "No peak is detected where a prediction should be made!")
@@ -531,6 +598,7 @@ class Prediction:
             print("However, the program will continue...")
             self.make_op_log_entry("However, the program will continue...")
         else:
+            print("Peak is detected where prediction should be made.")
             self.peak_found = True
             self.make_op_log_entry("INFO:\t" + "Peak is detected where a prediction should be made!")
 
@@ -542,7 +610,6 @@ class Prediction:
             self.make_op_log_entry("INFO:\t" + "Charge of the measured mass is negative. Removing formulas with Li, Na and K...")
             possible_formulas = {key: value for key, value in possible_formulas.items() if "Na" not in key and "K" not in key and "Li" not in key and "Mg" not in key and "Ca" not in key and "Be" not in key}
 
-
         atoms_to_keep_in_prediction = ["C", "H", "N", "O", "S", "Se", "Cl", "Ni", "Cu", "Zn", "Br"]
         possible_formulas_dict_list = [MS_functions.get_formula_to_dict(formula_string=f) for f, dev in possible_formulas.items()]
         possible_deviations_list = [dev for f, dev in possible_formulas.items()]
@@ -553,6 +620,8 @@ class Prediction:
             else:
                 new_possible_formulas[MS_functions.get_formula_string_from_dict(possible_formulas_dict_list[i])] = possible_deviations_list[i]
         possible_formulas = new_possible_formulas
+
+        print(possible_formulas)
 
         self.make_op_log_entry("=============================================================")
         self.make_op_log_entry("OUTPUT OF SIMPLE FORMULA PREDICTION (ONLY MASS DEVIAITON):")
@@ -585,6 +654,7 @@ class Prediction:
                         continue
         
         self.formula_score_dict = dict(sorted(self.formula_score_dict.items(), key=lambda x: x[1], reverse=True))
+        print("Formula score dict: " + str(self.formula_score_dict))
         self.make_op_log_entry("=============================================================")
         self.make_op_log_entry("FORMULA SCORE DICITIONARY:")
         for item in list(self.formula_score_dict.items()):
@@ -827,11 +897,9 @@ class Prediction:
         return measured_intensity
 
     def check_for_isotope_pattern(self, formula_dict):
+        influence_ppm_deviation = self.kwargs["pred_ratio_influence_ppm_deviation_vs_intensity"]
+        influence_intensity_changes = 1-self.kwargs["pred_ratio_influence_ppm_deviation_vs_intensity"]
 
-        ordered_mass_intensity_dict = {self.spec.masses[i]: self.spec.intensities[i] for i in range(len(self.spec.masses))}
-        ordered_mass_intensity_dict = dict(sorted(ordered_mass_intensity_dict.items(), key=lambda x: x[1], reverse=True))
-        ordered_mass_intensity_dict = {key: value for key, value in ordered_mass_intensity_dict.items() if value > 1}
-        
         isotope_pattern_dict = MS_functions.simulate_isotope_pattern_of_formula(formula_dict)
         isotope_pattern_dict = dict(sorted(isotope_pattern_dict.items(), key=lambda x: x[1], reverse=True))
         self.make_op_log_entry("Simulated isotope pattern (not corrected for charge and electron mass (equals neutral charge)): " + str(isotope_pattern_dict))
@@ -860,17 +928,28 @@ class Prediction:
         print("Initial deviation for isotope check: " + str(initial_deviation))
 
         if (not self.spec_before is None) and (not self.spec_after is None):
+            closest_isotopo_mass = min(list(self.spec.summarized_mass_intensity_dict.keys()), key=lambda x: abs(isotopo_mass - x))
+            closest_isotopo_mass_before = min(list(self.spec_before.summarized_mass_intensity_dict.keys()), key=lambda x: abs(isotopo_mass - x))
+            closest_isotopo_mass_after = min(list(self.spec_after.summarized_mass_intensity_dict.keys()), key=lambda x: abs(isotopo_mass - x))
+
             self.intensity_of_ion = 0
-            self.intensity_of_ion += self.get_intensity_of_mass_in_spec(isotopo_mass, spec=self.spec, initial_deviation=initial_deviation)
-            self.intensity_of_ion += self.get_intensity_of_mass_in_spec(isotopo_mass, spec=self.spec_before, initial_deviation=initial_deviation)
-            self.intensity_of_ion += self.get_intensity_of_mass_in_spec(isotopo_mass, spec=self.spec_after, initial_deviation=initial_deviation)
+            if ( ( abs(closest_isotopo_mass - isotopo_mass) / isotopo_mass ) * 1000000 ) <= self.kwargs["mass_deviation"]:
+                self.intensity_of_ion = self.spec.summarized_mass_intensity_dict[closest_isotopo_mass]
+            if ((abs(closest_isotopo_mass_before - isotopo_mass) / isotopo_mass) * 1000000) <= self.kwargs["mass_deviation"]:
+                self.intensity_of_ion += self.spec_before.summarized_mass_intensity_dict[closest_isotopo_mass_before]
+            if ((abs(closest_isotopo_mass_after - isotopo_mass) / isotopo_mass) * 1000000) <= self.kwargs["mass_deviation"]:
+                self.intensity_of_ion += self.spec_after.summarized_mass_intensity_dict[closest_isotopo_mass_after]
         else:
-            self.intensity_of_ion = sum([self.spec.intensities[i] for i in range(len(self.spec.masses)) if abs(((self.spec.masses[i] - self.mass) / self.mass) * 1000000) <= self.kwargs["mass_deviation"]])
+            self.intensity_of_ion = 0
+            if ((abs(self.mass - isotopo_mass) / isotopo_mass) * 1000000) <= self.kwargs["mass_deviation"]:
+                self.intensity_of_ion = self.spec.summarized_mass_intensity_dict[self.mass]
+            #self.intensity_of_ion = sum([self.spec.summarized_intensities[i] for i in range(len(self.spec.summarized_masses)) if abs(((self.spec.summarized_masses[i] - self.mass) / self.mass) * 1000000) <= self.kwargs["mass_deviation"]])
+        print("Intensity of the ion to check: " + str(self.intensity_of_ion))
 
         for isotopo in list(isotope_pattern_dict.items()):
             break_the_isotopo_prediction = False
             isotopo_mass = isotopo[0]
-            within_deviation_mass_list = [masse for masse in list(self.spec.summarized_mass_intensity_dict.keys()) if abs((((isotopo_mass - masse) / isotopo_mass) * 1000000) - initial_deviation) < self.kwargs["pred_max_ppm_deviation_change_for_isotopologue"]]
+            #within_deviation_mass_list = [masse for masse in list(self.spec.summarized_mass_intensity_dict.keys()) if abs((((isotopo_mass - masse) / isotopo_mass) * 1000000) - initial_deviation) < self.kwargs["pred_max_ppm_deviation_change_for_isotopologue"]]
             measured_mass_with_minimal_deviation = min(list(self.spec.summarized_mass_intensity_dict.keys()), key=lambda x: abs((((isotopo_mass - x) / isotopo_mass) * 1000000) - initial_deviation))
             deviation = ((isotopo_mass - measured_mass_with_minimal_deviation) / isotopo_mass) * 1000000
             theoretical_intensity = (self.intensity_of_ion / (list(isotope_pattern_dict.items())[0][1])) * isotopo[1]
@@ -879,16 +958,24 @@ class Prediction:
             noise = sorted(list(self.spec.summarized_mass_intensity_dict.values()))[int(len(list(self.spec.summarized_mass_intensity_dict.items())) / self.kwargs["pred_noise_divisor_for_isotopologue_calculation"])] + self.kwargs["pred_minimum_assumed_noise"]
 
             if (not self.spec_before is None) and (not self.spec_after is None):
-                measured_intensity_with_surrounding_spectra = 0
-                measured_intensity_with_surrounding_spectra += self.get_intensity_of_mass_in_spec(isotopo_mass, spec=self.spec, initial_deviation=initial_deviation)
-                measured_intensity_with_surrounding_spectra += self.get_intensity_of_mass_in_spec(isotopo_mass, spec=self.spec_before, initial_deviation=initial_deviation)
-                measured_intensity_with_surrounding_spectra += self.get_intensity_of_mass_in_spec(isotopo_mass, spec=self.spec_after, initial_deviation=initial_deviation)
-                #print("Old ratio: " + str(intensity_of_ion_with_surrounding_spectra/measured_intensity_with_surrounding_spectra) + "  New ratio: " + str(self.intensity_of_ion/measured_intensity))
-                measured_intensity = measured_intensity_with_surrounding_spectra
-            else:
+                print("Spec before and spec after is used.")
+                closest_isotopo_mass = min(list(self.spec.summarized_mass_intensity_dict.keys()), key=lambda x: abs((((isotopo_mass - x) / isotopo_mass) * 1000000) - initial_deviation))
+                closest_isotopo_mass_before = min(list(self.spec_before.summarized_mass_intensity_dict.keys()), key=lambda x: abs((((isotopo_mass - x) / isotopo_mass) * 1000000) - initial_deviation))
+                closest_isotopo_mass_after = min(list(self.spec_after.summarized_mass_intensity_dict.keys()), key=lambda x: abs((((isotopo_mass - x) / isotopo_mass) * 1000000) - initial_deviation))
                 measured_intensity = 0
-                for masse in within_deviation_mass_list:
-                    measured_intensity = measured_intensity + self.spec.summarized_mass_intensity_dict[masse]
+                if ((abs(closest_isotopo_mass - isotopo_mass) / isotopo_mass) * 1000000) <= self.kwargs["mass_deviation"]:
+                    measured_intensity = self.spec.summarized_mass_intensity_dict[closest_isotopo_mass]
+                if ((abs(closest_isotopo_mass_before - isotopo_mass) / isotopo_mass) * 1000000) <= self.kwargs["mass_deviation"]:
+                    measured_intensity += self.spec_before.summarized_mass_intensity_dict[closest_isotopo_mass_before]
+                if ((abs(closest_isotopo_mass_after - isotopo_mass) / isotopo_mass) * 1000000) <= self.kwargs["mass_deviation"]:
+                    measured_intensity += self.spec_after.summarized_mass_intensity_dict[closest_isotopo_mass_after]
+            else:
+                print("Only one spec is used.")
+                measured_intensity = 0
+                closest_isotopo_mass = min(list(self.spec.summarized_mass_intensity_dict.keys()), key=lambda x: abs((((isotopo_mass - x) / isotopo_mass) * 1000000) - initial_deviation))
+                if ((abs(closest_isotopo_mass - isotopo_mass) / isotopo_mass) * 1000000) <= self.kwargs["mass_deviation"]:
+                    closest_isotopo_mass = min(list(self.spec.summarized_mass_intensity_dict.keys()), key=lambda x: abs((((isotopo_mass - x) / isotopo_mass) * 1000000) - initial_deviation))
+                    measured_intensity = self.spec.summarized_mass_intensity_dict[closest_isotopo_mass]
 
             print("Measured intensity for ion: " + str(measured_intensity))
 
@@ -905,45 +992,26 @@ class Prediction:
                     score = -(-1.6 + (1 / (0.65 + (2.718281828459045 ** (-self.kwargs["pred_isotopologue_score_e_function_exponent"] * (score-1 ))))))
                 # score: je naeher an 1 desto besser; wenn negativ: weniger gemessen als theoretisch da; wenn positiv: mehr gemessen als theoretisch da.
                 if score < 1:
-                    score = score ** (0.7/(2-self.kwargs["pred_isotopologue_score_e_function_exponent"]))
-                    #score = score - (score * 0.15)
-                    #score = score ** (1/(1-self.kwargs["pred_isotopologue_score_e_function_exponent"]))
+                    score = score ** (0.9/(2-self.kwargs["pred_isotopologue_score_e_function_exponent"]))
 
                 score = score.real
-
                 score = score - 0.5
-
                 score = ((score * 100) + 0.001)
                 print("Score1: " + str(score))
 
-                #if theoretical_intensity < noise:
-                #    try:
-                #        second_highest_abundance = (list(isotope_pattern_dict.items())[1][1])
-                #        curr_abundance = isotopo[1]
-                #    except:
-                #        second_highest_abundance = 1
-                #        curr_abundance = 1
-                #    score_multiplier_by_intensity_and_noise = abs(1 / (math.log(theoretical_intensity / noise) - 1)) * ((1 - math.exp(-((curr_abundance / second_highest_abundance) * 6)) )+0.2)
-                #else:
-                #    try:
-                #        second_highest_abundance = (list(isotope_pattern_dict.items())[1][1])
-                #        curr_abundance = isotopo[1]
-                #    except:
-                #        second_highest_abundance = 1
-                #        curr_abundance = 1
-                #    #score_multiplier_by_intensity_and_noise = abs(math.log(measured_intensity / noise) + 1) * ((1 - math.exp(-((curr_abundance / second_highest_abundance) * 6)) )+0.2)
-                #    score_multiplier_by_intensity_and_noise = abs(math.log(theoretical_intensity / noise) + 1) * ((1 - math.exp(-((curr_abundance / second_highest_abundance) * 6))) + 0.2)
+                score = score * (influence_intensity_changes / 0.5)
 
                 score_multiplier_by_intensity_and_noise = theoretical_intensity / (theoretical_intensity + noise)
-
                 if isotopo == list(isotope_pattern_dict.items())[0]:
+                    print("First isotopo, continuing with next isotopo")
                     isotopes_found[isotopo[0]].append(0)
                     isotopes_found[isotopo[0]].append(measured_mass_with_minimal_deviation)
                     previous_score = 9999999
                     continue
 
-                score = score * score_multiplier_by_intensity_and_noise
 
+
+                score = score * score_multiplier_by_intensity_and_noise
                 print("Score2: " + str(score))
                 print("score multiplier: " + str(score_multiplier_by_intensity_and_noise))
 
@@ -958,18 +1026,20 @@ class Prediction:
                     ppm_influence = abs(ppm_influence * self.kwargs["pred_multiplier_isotopologue_influence_of_ppm_deviation_on_score"] * score_multiplier_by_intensity_and_noise)
                     if ppm_influence > 30:
                         ppm_influence = 30
+                    ppm_influence = ppm_influence * (influence_ppm_deviation / 0.5)
                     score = (score) - ppm_influence
                     print("Score4: " + str(score))
                     isotopes_found[isotopo[0]].append(score)
-                    if (score - abs(self.kwargs["pred_stop_isotopologue_search_if_score_lower_than"]) >= previous_score):
-                        isotopes_found[isotopo[0]][-1] = isotopes_found[isotopo[0]][-1] * 0.1
                     isotopes_found[isotopo[0]].append(measured_mass_with_minimal_deviation)
+                    if (score - abs(self.kwargs["pred_stop_isotopologue_search_if_score_lower_than"]) >= previous_score):
+                        isotopes_found[isotopo[0]][-2] = isotopes_found[isotopo[0]][-2] * 0.1
                     break
                 else:
                     ppm_influence = ((2 ** ((self.kwargs["pred_isotopologue_score_e_function_exponent"] * 2) * (abs(deviation) - (self.kwargs["mass_deviation"] / 3)))) * 2)
                     ppm_influence = abs(ppm_influence * self.kwargs["pred_multiplier_isotopologue_influence_of_ppm_deviation_on_score"] * score_multiplier_by_intensity_and_noise)
                     if ppm_influence > 50:
                         ppm_influence = 50
+                    ppm_influence = ppm_influence * (influence_ppm_deviation/0.5)
                     score = (score) - ppm_influence
                     print("Score4: " + str(score))
                     isotopes_found[isotopo[0]].append(score)
@@ -978,15 +1048,21 @@ class Prediction:
                 if (score < self.kwargs["pred_stop_isotopologue_search_if_score_lower_than"]):
                     break
 
-                if (score - abs(self.kwargs["pred_stop_isotopologue_search_if_score_lower_than"]) >= previous_score):
-                    isotopes_found[isotopo[0]][-1] = isotopes_found[isotopo[0]][-1] * 0.1
+                if (score - ( abs(previous_score) / 10 ) >= previous_score):
+                    isotopes_found[isotopo[0]][-2] = isotopes_found[isotopo[0]][-2] * 0.1
                     break
                 previous_score = score
                 if break_the_isotopo_prediction:
                     break
             else:
                 isotopes_found[isotopo[0]] = [False, theoretical_intensity, measured_intensity]
-                negative_score = 50 * (theoretical_intensity / (theoretical_intensity + noise))
+                try:
+                    multiplier_neg_score = abs(previous_score)
+                    if multiplier_neg_score >= 50:
+                        multiplier_neg_score = 50
+                except UnboundLocalError:
+                    multiplier_neg_score = 50
+                negative_score = multiplier_neg_score * (theoretical_intensity / (theoretical_intensity + noise))
                 try:
                     second_highest_abundance = (list(isotope_pattern_dict.items())[1][1])
                     curr_abundance = isotopo[1]
@@ -998,7 +1074,8 @@ class Prediction:
                 isotopes_found[isotopo[0]].append(negative_score)
                 isotopes_found[isotopo[0]].append(measured_mass_with_minimal_deviation)
                 break
-        self.intensity_of_ion = sum([self.spec.intensities[i] for i in range(len(self.spec.masses)) if abs(((self.spec.masses[i] - self.mass) / self.mass) * 1000000) <= self.kwargs["mass_deviation"]])
+        self.intensity_of_ion = self.spec.summarized_mass_intensity_dict[self.mass]
+        #self.intensity_of_ion = sum([self.spec.summarized_intensities[i] for i in range(len(self.spec.summarized_masses)) if abs(((self.spec.summarized_masses[i] - self.mass) / self.mass) * 1000000) <= self.kwargs["mass_deviation"]])
         return isotopes_found
     
     def make_op_log_entry(self, log_entry, error=False):
@@ -1123,7 +1200,7 @@ class Prediction:
                     delta_score = -1 * delta_score
                 rel_isotopo_abundance = (isotopo_abundance / (list(simulated_isotopo_abundances_dict.items())[0][1] ))
                 if delta_score < 0:
-                    delta_score = delta_score * 1.3
+                    delta_score = delta_score * 2   #previously * 1.3
                     break_formula_evaluation = True
                 if break_formula_evaluation:
                     rel_isotopo_abundance = (sum(list(simulated_isotopo_abundances_dict.values())[list(simulated_isotopo_abundances_dict.values()).index(isotopo_abundance):]) / (list(simulated_isotopo_abundances_dict.items())[0][1] ))
@@ -2046,7 +2123,6 @@ class OneAnalysis:
                 print("Error in getting prediction with multiple specs: " + str(e))
                 print(traceback.format_exc())
                 continue
-        print(predictions)
         self.make_oa_log_entry("INFO:\t" + "Finished prediction with multiple specs...")
         self.make_oa_log_entry("INFO:\t" + "Starting summarizing formula score dicts...")
         summarized_formula_score_dict = {}
@@ -2300,205 +2376,6 @@ class OneAnalysis:
         return True
 
 
-class PeakFinding:
-    def __init__(self, ms_file, **kwargs):
-        self.ms_file = ms_file
-        self.peak_properties_list = []
-
-
-
-        default_kwargs = {"mass_deviation":11,
-                          "minimum_required_max_intensity":100000,
-                          "minimum_peak_width_seconds":0.1,
-                          "maximum_peak_width_seconds":10,
-                          "minimum_peak_prominence":50000,
-                          "peak_finding_log_filepath":str(self.ms_file.parentfolder + "/" + "peak_finding_log.txt"),
-                          "round_for_masses_summary": 4 }
-        self.kwargs = {**default_kwargs, **kwargs}
-        os.makedirs(self.kwargs["peak_finding_log_filepath"], exist_ok=True)
-
-        print("Starting peak finding...")
-        ordered_mass_intensity_dict = self.get_all_available_masses_in_list()
-        print("Finished getting all available masses in list!")
-        print(ordered_mass_intensity_dict)
-
-        while len(ordered_mass_intensity_dict) > 0:
-            curr_mass = list(ordered_mass_intensity_dict.keys())[0]
-            mass_evaluation = self.search_peaks_for_mass(curr_mass)
-            print(mass_evaluation)
-            for peak in mass_evaluation:
-                self.peak_properties_list.append(peak)
-            del ordered_mass_intensity_dict[curr_mass]
-        print("Finished peak finding!")
-        self.peak_properties_list = sorted([peak for peak in self.peak_properties_list], key=lambda x: x[2])
-        print("Peak properties list: " + str(self.peak_properties_list))
-
-    def search_peaks_for_mass(self, mass):
-        print("Evaluating peak for mass: " + str(mass))
-        xic = MS_functions.get_xic(self.ms_file.rawdata, mass, ((self.kwargs["mass_deviation"]*mass)/1000000), requested_filter_mode="Full scan")
-        times = xic[0]
-        intensities = xic[1]
-        window, order = 5, 3
-        intensities = scipy.signal.savgol_filter(intensities, window, order, mode="nearest")
-        peak_properties = scipy.signal.find_peaks(intensities, height=max(intensities)/100, distance=2, prominence=max(intensities)/50, width=(2, 20))
-        identified_peaks = []
-        for element in range(len(peak_properties[1]["peak_heights"])):
-            if peak_properties[1]["peak_heights"][element] < self.kwargs["minimum_required_max_intensity"] or \
-                peak_properties[1]["prominences"][element] < self.kwargs["minimum_peak_prominence"]:
-                continue
-            one_peak = []
-            one_peak.append(mass)
-            one_peak.append(times[int(peak_properties[1]["left_ips"][element] + (peak_properties[1]["widths"][element]/2))])
-            one_peak.append(peak_properties[1]["peak_heights"][element])
-            one_peak.append(times[int(peak_properties[1]["right_ips"][element])] - times[int(peak_properties[1]["left_ips"][element])])
-            one_peak.append(peak_properties[1]["prominences"][element])
-            identified_peaks.append(one_peak)
-        #[[mass, time, height, duration, prominence], [....], ...]
-        return identified_peaks
-
-    def combine_and_sum_dicts(self, dict1, dict2):
-        return {k: dict1.get(k, 0) + dict2.get(k, 0) for k in set(dict1) | set(dict2)}
-
-    def get_best_approx_for_ppm_spacing_within_peak(self, mass_list, worst_expected_ppm_deviation=20):
-        mass_list = sorted(mass_list)
-        ppm_spacing_list = [(((mass_list[i+1] - mass_list[i]) / mass_list[i]) * 1000000) for i in range(len(mass_list)-1)]
-        ppm_spacing_list = [ppm for ppm in ppm_spacing_list if ppm < worst_expected_ppm_deviation]
-        avg_ppm = sum(ppm_spacing_list) / len(ppm_spacing_list)
-        return avg_ppm
-
-    def summarize_mass_intensity_dict_with_deviation(self, dictio, deviation=11):
-        print("=============================================================")
-        print("=============================================================")
-        start_time = datetime.datetime.now()
-        print("Start time: " + str(datetime.datetime.now()))
-        print("summarizing dict according to new method")
-        dictio = {k: v for k, v in dictio.items() if v >= 1}
-        #sort the dictio by its keys
-        dictio = dict(sorted(dictio.items(), key=lambda item: item[0]))
-        print("old length of start dictio:")
-        print(len(dictio))
-
-        old_masses_list = list(dictio.keys())
-        old_abundances_list = list(dictio.values())
-        new_masses_list = []
-        new_abundances_list = []
-
-        best_approx_ppm_spacing_within_peak = self.get_best_approx_for_ppm_spacing_within_peak(old_masses_list)
-        print("best approx for ppm spacing within peak: " + str(best_approx_ppm_spacing_within_peak))
-
-        while len(old_masses_list) > 0:
-            try:
-                remove_all_lower = False
-                remove_all_upper = False
-                index_of_highest_abundance = old_abundances_list.index(max(old_abundances_list))
-                curr_mass = old_masses_list[index_of_highest_abundance]
-                mass_lower_border = curr_mass - ((deviation*curr_mass)/1000000)
-                mass_upper_border = curr_mass + ((deviation*curr_mass)/1000000)
-                iteration_step_lower = 0
-                integration_step_upper = 0
-                last_existing_mass_within_border = curr_mass
-                last_abundance = old_abundances_list[index_of_highest_abundance]
-                expected_min_spacing_between_measurement_points = (best_approx_ppm_spacing_within_peak * curr_mass) / 1000000
-                try:
-                    while (mass_lower_border < old_masses_list[index_of_highest_abundance-iteration_step_lower]) and \
-                            (last_existing_mass_within_border - old_masses_list[index_of_highest_abundance-iteration_step_lower] <= 2.2*expected_min_spacing_between_measurement_points) and \
-                                (old_abundances_list[index_of_highest_abundance-iteration_step_lower] <= (1.1 * last_abundance)):
-                        last_existing_mass_within_border = old_masses_list[index_of_highest_abundance-iteration_step_lower]
-                        last_abundance = old_abundances_list[index_of_highest_abundance-iteration_step_lower]
-                        iteration_step_lower += 1
-                except IndexError:
-                    remove_all_lower = True
-                    iteration_step_lower = 0
-                last_existing_mass_within_border = curr_mass
-                last_abundance = old_abundances_list[index_of_highest_abundance]
-                try:
-                    while (mass_upper_border > old_masses_list[index_of_highest_abundance+integration_step_upper]) and \
-                            (old_masses_list[index_of_highest_abundance+integration_step_upper] - last_existing_mass_within_border <= 2.2*expected_min_spacing_between_measurement_points) and \
-                                (old_abundances_list[index_of_highest_abundance+integration_step_upper] <= (1.1 * last_abundance)):
-                        last_existing_mass_within_border = old_masses_list[index_of_highest_abundance+integration_step_upper]
-                        last_abundance = old_abundances_list[index_of_highest_abundance+integration_step_upper]
-                        integration_step_upper += 1
-                except IndexError:
-                    remove_all_upper = True
-                    integration_step_upper = 0
-                
-                if remove_all_lower == True and remove_all_upper == True:
-                    break
-                if remove_all_upper:
-                    summed_intensity = sum([old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, len(old_abundances_list), 1)])
-                    weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, len(old_abundances_list), 1)]) / summed_intensity
-                    new_masses_list.append(weighted_mass_average)
-                    new_abundances_list.append(summed_intensity)
-                    old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, len(old_masses_list), 1)]
-                    old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, len(old_abundances_list), 1)]
-                    continue
-                if remove_all_lower:
-                    summed_intensity = sum([old_abundances_list[i] for i in range(0, index_of_highest_abundance+integration_step_upper, 1)])
-                    weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(0, index_of_highest_abundance+integration_step_upper, 1)]) / summed_intensity
-                    new_masses_list.append(weighted_mass_average)
-                    new_abundances_list.append(summed_intensity)
-                    old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(0, index_of_highest_abundance+integration_step_upper, 1)]
-                    old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(0, index_of_highest_abundance+integration_step_upper, 1)]
-                    continue
-
-                if iteration_step_lower == 0 and integration_step_upper == 0:
-                    summed_intensity = old_abundances_list[index_of_highest_abundance]
-                    weighted_mass_average = old_masses_list[index_of_highest_abundance]
-                    new_masses_list.append(weighted_mass_average)
-                    new_abundances_list.append(summed_intensity)
-                    old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if not i == index_of_highest_abundance ]
-                    old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if not i == index_of_highest_abundance ]
-                    continue
-
-                summed_intensity = sum([old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper, 1)])
-                weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper, 1)]) / summed_intensity
-                new_masses_list.append(weighted_mass_average)
-                new_abundances_list.append(summed_intensity)
-                old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper, 1)]
-                old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper, 1)]
-            except Exception as e:
-                print("EXCEPTION IN summarize_mass_intensity_dict_with_deviation()!!!")
-                print(traceback.format_exc())
-                print(e)
-                break
-        outdict = dict(zip(new_masses_list, new_abundances_list))
-        print("new length of summarized dictio:")
-        print(len(outdict))
-        print("End time: " + str(datetime.datetime.now()))
-        print("Time taken = " + str(datetime.datetime.now() - start_time))
-        return outdict
-
-    def get_all_available_masses_in_list(self):
-        ordered_mass_intensity_dict = {}
-        for entry in self.ms_file.all_ms_spectra:
-            if not self.ms_file.all_modes[self.ms_file.all_ms_spectra.index(entry)] == "Full scan":
-                continue
-            if self.ms_file.all_ms_spectra.index(entry) > 300:
-                break
-            print(str(self.ms_file.all_ms_spectra.index(entry)) + " / " + str(len(self.ms_file.all_ms_spectra)))
-            curr_save = entry
-            curr_save = {round(key, self.kwargs["round_for_masses_summary"]): value for key, value in curr_save.items() if value > self.kwargs["minimum_required_max_intensity"]/10}
-            ordered_mass_intensity_dict = self.combine_and_sum_dicts(ordered_mass_intensity_dict, curr_save)
-            ordered_mass_intensity_dict = {round(key, self.kwargs["round_for_masses_summary"]): value for key, value in ordered_mass_intensity_dict.items() if value > self.kwargs["minimum_required_max_intensity"]/10}
-        print("ORDERED MASS INTENSITY DICT____FIRST STEP:")
-        print(len(ordered_mass_intensity_dict))
-        print(ordered_mass_intensity_dict)
-
-        ordered_mass_intensity_dict = dict(sorted(ordered_mass_intensity_dict.items(), key=lambda x: x[1], reverse=True))
-        ordered_mass_intensity_dict = self.summarize_mass_intensity_dict_with_deviation(ordered_mass_intensity_dict, self.kwargs["mass_deviation"])
-        print("ORDERED MASS INTENSITY DICT____SECOND STEP:")
-        print(len(ordered_mass_intensity_dict))
-        print(ordered_mass_intensity_dict)
-
-        ordered_mass_intensity_dict = dict(sorted(ordered_mass_intensity_dict.items(), key=lambda x: x[1], reverse=True))
-        ordered_mass_intensity_dict = {key: value for key, value in ordered_mass_intensity_dict.items() if value > self.kwargs["minimum_required_max_intensity"]}
-        print("ORDERED MASS INTENSITY DICT____LAST STEP:")
-        print(len(ordered_mass_intensity_dict))
-        print(ordered_mass_intensity_dict)
-        return ordered_mass_intensity_dict
-    
-        
-            
 
             
 if __name__ == "__main__":
@@ -2547,8 +2424,7 @@ if __name__ == "__main__":
     #myspec = Spec(ms_file, 400, requested_filter_mode="Full scan", save_plot=True, unique_spec_folder="test/")
 
     #print(myspec.index)
-    #print(myspec.masses)
-    #print(myspec.intensities)
+
     #print(myspec.filter)
     #print(myspec.filter_mode)
     #print(myspec.ms_ms_masses)
