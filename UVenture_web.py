@@ -21,8 +21,11 @@ import multiprocessing
 class Webpage:
     def __init__(self) -> None:
         self.parentfolder = "webserver_save/"
+        os.makedirs(self.parentfolder, exist_ok=True)
         self.mzml_folder = self.parentfolder + "mzml_files/"
+        os.makedirs(self.mzml_folder, exist_ok=True)
         self.results_folder = self.parentfolder + "results/"
+        os.makedirs(self.results_folder, exist_ok=True)
         self.app = flask.Flask(__name__)
         self.server = None
         self.available_files = os.listdir(self.mzml_folder)
@@ -31,6 +34,7 @@ class Webpage:
         self.curr_xic_encoded_plot = {}
         self.curr_spec_encoded_plot = {}
         self.curr_mass_deviation = 0
+        os.makedirs("static", exist_ok=True)
         self.settings_file_filepath = "static/settings.txt"
         self.settings_default_file_filepath = "static/settings_default.txt"
         self.help_page_contents_filepath = "static/help_page_contents.txt"
