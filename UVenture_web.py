@@ -35,8 +35,11 @@ def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
 class Webpage:
     def __init__(self) -> None:
         self.parentfolder = "webserver_save/"
+        os.makedirs(self.parentfolder, exist_ok=True)
         self.mzml_folder = self.parentfolder + "mzml_files/"
+        os.makedirs(self.mzml_folder, exist_ok=True)
         self.results_folder = self.parentfolder + "results/"
+        os.makedirs(self.results_folder, exist_ok=True)
         self.app = flask.Flask(__name__)
         self.server = None
         self.available_files = os.listdir(self.mzml_folder)
