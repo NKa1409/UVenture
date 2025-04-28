@@ -81,15 +81,7 @@ Future updates are planned to include:
 - [ ] Allow for GC/EI-HRMS data analysis with fragment annotation and precursor ion identification.
 
 ## Contributing
-Contributions are welcome! If you would like to:
-
-Report a bug
-
-Request a feature
-
-Submit a pull request
-
-Please follow the Contribution Guidelines.
+Contributions and recommendations for upcoming versions are welcome!
 
 ## Citation
 If you use this software for your research, please cite:
