@@ -1,19 +1,30 @@
 # UVenture
+
  **Analyze Full MS / AIF experiments and reconstruct quasi-isolated MS² spectra.**
-
-
+ 
 This repository contains the code for a tool developed to process high-resolution Full MS and All-Ion Fragmentation (AIF) mass spectrometry data.  
 The program allows researchers to reconstruct quasi-isolated MS² spectra from complex AIF datasets, facilitating deeper structural elucidation and compound identification.
 
 Future versions with enhanced functionality and optimizations are planned and will be published in this repository.
 
 ### Features
+-  Easy to use (simple user interface and installation process)
+-  Identification of sum formulas of precursor ions and related fragment ions.
+-  Reconstruction of quasi-isolated MS² spectra from Full MS / AIF data.
+-  Flexible parameter settings for different instruments and experimental setups.
+-  Spectra, chromatograms and logfiles for every compound.
+-  Export of a summary file for easy downstream analysis.
 
-- ✅ Reconstruction of quasi-isolated MS² spectra from Full MS / AIF data
-- ✅ Automated peak picking and deconvolution
-- ✅ Flexible parameter settings for different instruments and experimental setups
-- ✅ User-friendly graphical outputs
-- ✅ Export of reconstructed spectra for downstream analysis
+### Screenshots
+
+| Isolated MS² spectrum of Acetylsalicylic acid as captured with a data-dependent Measurement | Reconstructed MS² spectrum of Acetylsalicylic acid as captured by a data-independent (AIF) measurement and processed with the tool |
+|:------------------:|:--------------------------:|
+| ![Raw Spectra Screenshot](images/isolatedMSMS.png) | ![Reconstructed Spectra Screenshot](images/quasi_isolatedMSMS.png) |
+
+
+![Raw Spectra Screenshot](images/WebsiteDescription.png)
+
+Image of the Homepage as can be seen when accessing *IP:5000*. To start a new analysis, a *.mzML file must be uploaded to the server and can then be selected in the dropdown menu. Select the desired type of analysis and click "Upload to server".
 
 ---
 
@@ -57,13 +68,6 @@ To run the program:
 
 ---
 
-## Screenshots
-
-| Raw Data Analysis | Reconstructed MS² Spectra |
-|:------------------:|:--------------------------:|
-| ![Raw Spectra Screenshot](images/raw_spectra.png) | ![Reconstructed Spectra Screenshot](images/reconstructed_spectra.png) |
-
-
 ## Notes & Ideas for upcoming Versions
 Future updates are planned to include:
 
@@ -97,3 +101,5 @@ This project is licensed under the MIT License.
 See the LICENSE file for more details.
 
 ## Contact
+Niklas Karbach: n.karbach@uni-mainz.de
+Thorsten Hoffmann: t.hoffmann@uni-mainz.de
