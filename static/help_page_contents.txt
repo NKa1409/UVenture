@@ -1,1 +1,0 @@
-mass_deviation   esUWFds!&$!=====asfeDVW   What is the expected mass deviation of the instrument.\nCan either be calculated with the mass resolving power, or might be known from experience.\nE.g. Resolution 140000 -> Mass deviation 11
