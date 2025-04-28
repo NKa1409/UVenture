@@ -29,12 +29,13 @@ Image of the Homepage as can be seen when accessing *IP:5000*. To start a new an
 ---
 
 ## Installation
-
-1. Clone or download & unzip the repository and then go (*cd*) to the new folder:
+0. Make sure to have python installed on your system / on the server (tested with version: 3.12.0)
+   
+2. Clone or download & unzip the repository and then go (*cd*) to the new folder:
    ```bash
    cd path/of/the/new/folder # navigate to the newly downloaded folder
    
-2. Create and activate a virtual environment
+3. Create and activate a virtual environment
    ```bash
    # Create virtual environment (venv)
    python -m venv path/to/venv
@@ -43,11 +44,11 @@ Image of the Homepage as can be seen when accessing *IP:5000*. To start a new an
    source path/to/venv/bin/activate # on Linux
    path\to\venv\Scripts\activate # on Windows
 
-3. Install the required Python packages:
+4. Install the required Python packages:
    ```bash
    pip install -r requirements.txt
 
-4. Copy the formula cache to the appropriate location. This can either be done with the command line or via the desktop GUI. The destination folder where the formula cache should be saved can be checked and changed in the settings.
+5. Copy the formula cache to the appropriate location. This can either be done with the command line or via the desktop GUI. The destination folder where the formula cache should be saved can be checked and changed in the settings.
    
 
 ## Usage
