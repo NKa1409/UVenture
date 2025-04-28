@@ -1,3 +1,4 @@
+import ast
 import copy
 import sys
 import traceback
@@ -817,6 +818,20 @@ def get_formula_to_dict(formula_string):
 
 
 def get_formula_string_from_dict(formula_dict):
+    if isinstance(formula_dict, str):
+        try:
+            eventual_formula_dict = ast.literal_eval(formula_dict)
+            if isinstance(eventual_formula_dict, dict):
+                formula_dict = eventual_formula_dict
+            else:
+                pass
+        except:
+            pass
+    if isinstance(formula_dict, str):
+        try:
+            formula_dict = get_formula_to_dict(formula_dict)
+        except:
+            pass
     if len(formula_dict) == 0:
         return ""
     return "".join([str(a) + str(n) for a, n in formula_dict.items()])

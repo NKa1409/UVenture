@@ -15,6 +15,7 @@ from pyteomics import mzml
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import shutil
+import numpy as np
 
 DPI = 300
 
@@ -204,7 +205,8 @@ class Spec:
         self.summarized_intensities = list(self.summarized_mass_intensity_dict.values())
         print("Summarized mass intensity dict shortened to: " + str(len(self.summarized_mass_intensity_dict)) + " elements.")
         self.make_spec_log_entry("Summarized_mass_intensity_dict: ")
-        self.make_spec_log_entry(str(self.summarized_mass_intensity_dict))
+        log_summarized_mass_intensity_dict = {float(dictkey) if isinstance(dictkey, np.float64) else dictkey : float(dictvalue) if isinstance(dictvalue, np.float32) else dictvalue for dictkey, dictvalue in self.summarized_mass_intensity_dict.items()}
+        self.make_spec_log_entry(str(log_summarized_mass_intensity_dict))
 
         if self.kwargs["spec_save_go_plot"] == True:
             self.create_go_plot()
@@ -504,9 +506,9 @@ class Prediction:
         self.formula_score_dict = dict(sorted(self.formula_score_dict.items(), key=lambda x: x[1], reverse=True))
         print("Formula score dict: " + str(self.formula_score_dict))
         self.make_op_log_entry("=============================================================")
-        self.make_op_log_entry("FORMULA SCORE DICITIONARY:")
+        self.make_op_log_entry("FORMULA SCORE DICTIONARY:")
         for item in list(self.formula_score_dict.items()):
-            self.make_op_log_entry("{:>30} \t {:>20}".format(str(item[0]), str(round(item[1], 2))))
+            self.make_op_log_entry("{:>20} \t {:>10}".format(str(MS_functions.get_formula_string_from_dict(item[0])), str(round(item[1], 2))))
         
         if self.kwargs["pred_include_likelyhood_of_formula"] == True:
             self.formula_score_dict = self.add_likelyhood_of_formula_to_score(self.formula_score_dict)
@@ -516,9 +518,9 @@ class Prediction:
         self.formula_score_dict = dict(sorted(self.formula_score_dict.items(), key=lambda x: x[1], reverse=True))
 
         self.make_op_log_entry("=============================================================")
-        self.make_op_log_entry("FORMULA SCORE DICITIONARY:")
+        self.make_op_log_entry("FORMULA SCORE DICTIONARY:")
         for item in list(self.formula_score_dict.items()):
-            self.make_op_log_entry("{:>30} \t {:>20}".format(str(item[0]), str(round(item[1], 2))))
+            self.make_op_log_entry("{:>20} \t {:>10}".format(str(MS_functions.get_formula_string_from_dict(item[0])), str(round(item[1], 2))))
 
         if self.kwargs["pred_include_peak_matching_of_isotopologues"]:
             self.formula_score_dict = self.get_peak_matching_of_isotopologues(self.formula_score_dict)
@@ -526,9 +528,9 @@ class Prediction:
             self.formula_score_dict = dict(sorted(self.formula_score_dict.items(), key=lambda x: x[1], reverse=True))
 
         self.make_op_log_entry("=============================================================")
-        self.make_op_log_entry("FORMULA SCORE DICITIONARY:")
+        self.make_op_log_entry("FORMULA SCORE DICTIONARY:")
         for item in list(self.formula_score_dict.items()):
-            self.make_op_log_entry("{:>30} \t {:>20}".format(str(item[0]), str(round(item[1], 2))))
+            self.make_op_log_entry("{:>20} \t {:>10}".format(str(MS_functions.get_formula_string_from_dict(item[0])), str(round(item[1], 2))))
 
 
         if self.kwargs["pred_save_xic_plot"] == True:
@@ -553,7 +555,7 @@ class Prediction:
                 self.score_of_best_formula = self.formula_score_dict[(list(self.formula_score_dict.keys())[0])]
                 self.simulated_isotopologue_pattern_for_best_formula = MS_functions.simulate_isotope_pattern_of_formula(self.best_formula_prediction, mass_resolution_ppm=self.kwargs["mass_deviation"], debug_output=self.debug_output)
                 #self.simulated_isotopologue_pattern_for_best_formula = {mass: abundance, ...}
-                self.make_op_log_entry("INFO:\t" + "Best formula prediction set. " + str(self.best_formula_prediction) + "   " + str(self.score_of_best_formula))
+                self.make_op_log_entry("INFO:\t" + "Best formula prediction set. " + str(MS_functions.get_formula_string_from_dict(self.best_formula_prediction)) + "   " + str(self.score_of_best_formula))
             else:
                 self.make_op_log_entry("INFO:\t" + "No best formula was found!")
         except Exception as e:
@@ -853,7 +855,8 @@ class Prediction:
         for a in fig.get_axes():
             a.label_outer()
         #set the title of the whole figure so that it will be displayed above the subplots
-        fig.suptitle("Isotopologues plot for formula: " + str(formula_to_simulate) + 
+        formula_string = MS_functions.get_formula_string_from_dict(formula_to_simulate)
+        fig.suptitle("Isotopologues plot for formula: " + str(formula_string) +
                      "\n At RT: " + str(round(self.spec.rt, 2)) + " and Mass: " + str(round(self.mass, 4)))
         for a in ax:
             a.legend()
@@ -922,10 +925,10 @@ class Prediction:
                 change_score = change_score + (delta_score * (score*rel_isotopo_abundance) * isotopo_xic_matching_multiplier)
                 if rel_isotopo_abundance <= 0.001 or break_formula_evaluation:
                     break
-            print("Change score for formula: " + str(formula) + "    ; Change score: " + str(change_score) + "    ; New score = " + str(score + change_score))
+            print("Change score for formula: " + str(MS_functions.get_formula_string_from_dict(formula)) + "    ; Change score: " + str(change_score) + "    ; New score = " + str(score + change_score))
             new_score = score + change_score
             new_formula_score_dict[formula] = new_score
-            self.make_op_log_entry("Change score for formula: " + str(formula) + "    ; Change score: " + str(change_score) + "    ; New score = " + str(score + change_score))
+            self.make_op_log_entry("Change score for formula: " + str(MS_functions.get_formula_string_from_dict(formula)) + "    ; Change score: " + str(change_score) + "    ; New score = " + str(score + change_score))
         return new_formula_score_dict
 
     def save_xic_plot(self, times, intensities, xic_plot_filepath):
@@ -1192,7 +1195,14 @@ class OneAnalysis:
 
         write_to_summary_file_list = [self.rt]
         write_to_summary_file_list.extend(self.true_fragment_list)
-        
+
+        for i in range(len(write_to_summary_file_list)):
+            if isinstance(write_to_summary_file_list[i], np.float64):
+                write_to_summary_file_list[i] = float(write_to_summary_file_list[i])
+            elif isinstance(write_to_summary_file_list[i], list):
+                for k in range(len(write_to_summary_file_list[i])):
+                    if isinstance(write_to_summary_file_list[i][k], np.float64):
+                        write_to_summary_file_list[i][k] = float(write_to_summary_file_list[i][k])
         self.append_oa_summary_to_raw_file_summary(write_to_summary_file_list)
 
         self.make_oa_log_entry("INFO:\t" + "Finished appending summary to raw file summary...")
@@ -1664,7 +1674,8 @@ class OneAnalysis:
             with open(self.kwargs["one_analysis_folder"] + "predictions/BEST_FORMULA_" + str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.summarized_molecular_ion_formula_score_dict.keys())[0]).items()])) + ".txt", "a") as txt_file:
                 txt_file.write("Best prediction according to three spectra which are located next to the original peak: " + str(ast.literal_eval(list(self.summarized_molecular_ion_formula_score_dict.keys())[0])))
                 txt_file.write("\n")
-                txt_file.write("Summarized formula score dict: " + str(self.summarized_molecular_ion_formula_score_dict))
+                log_summarized_molecular_ion_formula_score_dict = {float(dictkey) if isinstance(dictkey, np.float64) else dictkey : float(dictvalue) if isinstance(dictvalue, np.float64) else dictvalue for dictkey, dictvalue in self.summarized_molecular_ion_formula_score_dict.items()}
+                txt_file.write("Summarized formula score dict: " + str(log_summarized_molecular_ion_formula_score_dict))
                 txt_file.write("\n")
 
         if self.molecular_ion_prediction.best_formula_prediction is None:
@@ -1679,8 +1690,9 @@ class OneAnalysis:
 
         self.summarized_molecular_ion_formula_score_dict = {f: s for f, s in self.summarized_molecular_ion_formula_score_dict.items() if s > (self.kwargs["oa_reject_formula_if_score_lower_than"]/5)}
         self.summarized_molecular_ion_formula_score_dict = dict(sorted(self.summarized_molecular_ion_formula_score_dict.items(), key=lambda x: x[1], reverse=True))
-        self.make_oa_log_entry("INFO:\t" + "Summarized formula score dict: " + str(self.summarized_molecular_ion_formula_score_dict))
-        print("Summarized formula score dict: " + str(self.summarized_molecular_ion_formula_score_dict))
+        log_summarized_molecular_ion_formula_score_dict = {float(dictkey) if isinstance(dictkey, np.float64) else dictkey: float(dictvalue) if isinstance(dictvalue, np.float64) else dictvalue for dictkey, dictvalue in self.summarized_molecular_ion_formula_score_dict.items()}
+        self.make_oa_log_entry("INFO:\t" + "Summarized formula score dict: " + str(log_summarized_molecular_ion_formula_score_dict))
+        print("Summarized formula score dict: " + str(log_summarized_molecular_ion_formula_score_dict))
 
         self.molecular_ion_prediction.make_op_log_entry("=============================================================")
         try:
@@ -1698,9 +1710,11 @@ class OneAnalysis:
         self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Formula predicted with " + str(len(available_specs)) + " spectra.")
         self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "All formula score dicts: ")
         for i, f_score_dict in enumerate(all_formula_score_dicts):
-            self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Formula score dict " + str(i) + ": " + str(f_score_dict))
+            log_f_score_dict = {MS_functions.get_formula_string_from_dict(dictkey) if isinstance(dictkey, dict) else dictkey: float(dictvalue) if isinstance(dictvalue, np.float64) else dictvalue for dictkey, dictvalue in f_score_dict.items()}
+            self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Formula score dict " + str(i) + ": " + str(log_f_score_dict))
         self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Best formula prediction: " + str(self.best_molecular_ion_prediction) + " Score: " + str(self.score_of_best_molecular_ion_prediction))
-        self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Summarized formula score dict: " + str(self.summarized_molecular_ion_formula_score_dict))
+        log_summarized_molecular_ion_formula_score_dict = {MS_functions.get_formula_string_from_dict(dictkey) if isinstance(dictkey, dict) else dictkey: float(dictvalue) if isinstance(dictvalue, np.float64) else dictvalue for dictkey, dictvalue in self.summarized_molecular_ion_formula_score_dict.items()}
+        self.molecular_ion_prediction.make_op_log_entry("INFO:\t" + "Summarized formula score dict: " + str(log_summarized_molecular_ion_formula_score_dict))
         self.molecular_ion_prediction.make_op_log_entry("=============================================================")
         self.make_oa_log_entry("INFO:\t" + "Molecular Ion Prediction finished. \nBest formula prediction: " + str(self.best_molecular_ion_prediction) + " single score: " + str(self.score_of_best_molecular_ion_prediction))
         return self.molecular_ion_prediction
@@ -1813,8 +1827,9 @@ class OneAnalysis:
         self.possible_fragment_masses = sorted(self.possible_fragment_masses, key=lambda m: self.best_frag_spec.summarized_intensities[self.best_frag_spec.summarized_masses.index(m)], reverse=True)
         print(self.possible_fragment_masses)
         self.possible_fragment_masses = [self.possible_fragment_masses[m] for m in range(len(self.possible_fragment_masses)) if m <= self.kwargs["oa_fragments_absolute_max_number_of_fragment_masses"]]
-        print("Possible fragment masses: " + str(self.possible_fragment_masses))
-        self.make_oa_log_entry("INFO:\t" + "Possible fragment masses: " + str(self.possible_fragment_masses))
+        log_possible_fragment_masses = [float(m) for m in self.possible_fragment_masses if isinstance(m, np.float64)]
+        print("Possible fragment masses: " + str(log_possible_fragment_masses))
+        self.make_oa_log_entry("INFO:\t" + "Possible fragment masses: " + str(log_possible_fragment_masses))
         self.fragment_predictions = {}
         self.fragment_predictions_formula_score_dicts = {}
 
