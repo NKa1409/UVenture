@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        body p {
+            width: 50%;
+            margin: 0 auto;
+            text-align: left;
+            font-family: Arial, sans-serif;
+            font-size: 1.1em;
+            color: #333;
+        }
+        h1 {
+            margin-bottom: 50px;
+        }
+        form {
+            width: 50%;
+            margin: 20px auto;
+            align-items: left;
+            background-color: #f2f2f2cf; 
+            padding: 20px; 
+            border-radius: 10px;
+        }
+        .form-group {
+            display: flex;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            font-size: 1.1em;
+            color: #333;
+        }
+        .form-group input[type="text"] {
+            margin-left: 10px;
+        }
+    </style>
+    <title>U_Venture</title>
+    <link rel="icon" href="{{ url_for('static', filename='uventure_icon.png') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="U_Venture. A simple tool to analyze full scan / AIF high resolution mass spectra. Provides formula predictions as well as MS/MS fragments.">
+    <meta charset="UTF-8">
+
+</head>
+<body>
+    
+        <h1 style="font-size: 3em; color: #224c84; font-family: Arial, sans-serif;">
+            Please stand by. The analysis is in progress... <br>
+            Once the analysis is done, you will find the results in the corresponding folder.
+        </h1>
+        
+        <hr style="width: 50%; margin: 0 auto;">
+</body>
+
+</html>
