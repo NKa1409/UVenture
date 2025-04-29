@@ -15,6 +15,7 @@ __pycache__/
 # Analysis results
 webserver_save/results/
 webserver_save/mzml_files/
+examples/
 static/Formula_Predictions/
 
 
