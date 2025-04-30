@@ -4,8 +4,6 @@ import datetime
 import io
 import os
 import shutil
-import subprocess
-import sys
 import threading
 import time
 import traceback
@@ -18,7 +16,6 @@ import werkzeug
 import UVenture
 import MS_functions
 import multiprocessing
-import psutil
 
 
 def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
@@ -41,13 +38,13 @@ class Webpage:
         self.results_folder = self.parentfolder + "results/"
         os.makedirs(self.results_folder, exist_ok=True)
         self.app = flask.Flask(__name__)
+        self.server = None
         self.available_files = os.listdir(self.mzml_folder)
         self.available_files = [f for f in self.available_files if f.endswith(".mzML")]
         self.curr_ms_file = None
         self.curr_xic_encoded_plot = {}
         self.curr_spec_encoded_plot = {}
         self.curr_mass_deviation = 0
-        os.makedirs("static", exist_ok=True)
         self.settings_file_filepath = "static/settings.txt"
         self.settings_default_file_filepath = "static/settings_default.txt"
         self.help_page_contents_filepath = "static/help_page_contents.txt"
@@ -142,8 +139,7 @@ class Webpage:
                     print(lines)
 
                     def create_task(lines):
-                        core_count = os.cpu_count()
-                        core_count = 6
+                        core_count = os.cpu_count() - 6
 
                         ms_filepath = self.mzml_folder + form_data["fileselection"]
                         parentfolder_msfile = self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/"
@@ -442,6 +438,8 @@ class Webpage:
                     # check if the file ends with .mzML
                     if not filename.endswith(".mzML"):
                         return flask.render_template_string("File must be in mzML format!")
+                    #check if parentfolder exists. If not, create it
+                    os.makedirs(self.mzml_folder, exist_ok=True)
                     #check if a file with the same name already exists
                     if filename in self.available_files:
                         return flask.render_template_string("File with the same name already exists!")
@@ -481,6 +479,20 @@ class Webpage:
             print(contents, subfolders)
             return flask.render_template("file_browser.html", contents=contents, subfolders=subfolders)
 
+        # Create a new thread for running the Flask application
+        #self.server = werkzeug.serving.make_server('127.0.0.1', 5000, self.app)
+        #self.thread = threading.Thread(target=self.server.serve_forever)
+        #self.thread.start()
+        #self.app.run(debug=True, use_reloader=True, port=5000)
+
+    def __del__(self):
+        # Stop the Flask application when the object is deleted
+        if self.server is not None:
+            self.server.shutdown()
+        if self.thread is not None:
+            self.thread.join()
+        print("Webpage object deleted and server stopped")
+
     def get_settings_dict(self):
         settings_dict = {}
         with open(self.settings_file_filepath, "r") as f:
@@ -506,6 +518,23 @@ class Webpage:
                 settings_dict[key] = value
         return settings_dict
 
+
+    def start_one_oa_thread(self, ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
+        mz = float(mz)
+        rt = float(rt)
+        def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
+            try:
+                ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile)
+                myanalysis = UVenture.OneAnalysis(ms_file, mz, rt, **settings_dict)
+                return
+            except Exception as e:
+                print(e)
+                print(traceback.format_exc())
+                return
+        thread_name = ("UVenture_OA_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_MZ_" + str(mz) + "_RT_" + str(rt))
+        thread = threading.Thread(target=caller_func, args=[ms_filepath, mz, rt, settings_dict, parentfolder_msfile], name=thread_name)
+        thread.start()
+
     def start_one_oa(self, ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
         mz = float(mz)
         rt = float(rt)
@@ -519,6 +548,7 @@ class Webpage:
 
 if __name__ == "__main__":
     webapp = Webpage()
+    #webapp.app.run(host="0.0.0.0", debug=False, use_reloader=False, port=5000)
     webapp.app.run(debug=False, use_reloader=False, port=5000)
     print("Server running")
     while True:

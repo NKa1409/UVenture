@@ -25,6 +25,7 @@ spec_save_go_plot=False
 #prediction_subfolder=
 #absolute_pred_folder=
 #pred_log_filepath=predLog.txt
+pred_atoms_to_keep_in_prediction=['C', 'H', 'N', 'O', 'S', 'Cl', 'Br']
 pred_save_matplotlib_plot_of_isotopologues=False
 pred_save_go_plot_of_isotopologues=False
 pred_save_xic_plot=False
@@ -52,6 +53,8 @@ pred_formula_likelihood_substract_score_rdbe_higher_than_senior_rule=50
 oa_save_xic_plot=True
 oa_mass_deviation_xic=0.001
 oa_xic_requested_filter_mode=Full scan
+
+oa_stop_if_oa_given_ion_is_a_fragment=True
 
 oa_spec_acquisition_save_matplotlib_plot=True
 oa_spec_acquisition_save_go_plot=False

@@ -1,16 +1,13 @@
+import ast
 import copy
 import sys
 import traceback
-from functools import lru_cache
-import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
+import similaritymeasures
 import scipy
-import PIL
 import matplotlib
 matplotlib.use('Agg')
-import pathlib
-import time
 import gzip
+import numpy as np
 
 
 
@@ -58,399 +55,9 @@ def get_xic(f, mass, mass_deviation, requested_filter_mode="Full scan"):
     return [rt_list, intensity_list, original_index_list]
 
 
-def get_mass_spectrum(f, value, mode="as_index", mass_deviation=0.005, requested_filter_mode="Full scan",
-                      requested_ms_ms_mass="", save_folder=""):
-    # FTMS - p APCI corona d Full ms2 138.0197@hcd29.67 [50.0000-160.0000]   --> MSMS
-    # FTMS - p APCI corona Full ms [50.0000-500.0000]   --> Full scan
-    # FTMS - p APCI corona Full ms2 225.0000@hcd29.67 [50.0000-400.0000]   --> AIF
-
-    # requested_filter_mode="Full scan" / "AIF" / "MS/MS" / "whatever"
-    def do_bg_substraction(y, frequency_in_seconds=1, prominence=400000, distance=3, min_height=0, width=(0, 0),
-                           sg_windows=(6, 50, 2), sg_orders=(5, 5, 1), not_including_peak_width_multiplier=3):
-        if min_height == 0:
-            min_height = max(y) / 10
-        else:
-            pass
-        approx_capture_duration_per_element = frequency_in_seconds
-        if width == (0, 0):
-            width = [int(5 / approx_capture_duration_per_element), int(20 / approx_capture_duration_per_element)]
-        else:
-            width = width
-
-        peaks, peak_properties = scipy.signal.find_peaks(scipy.signal.savgol_filter(y, sg_windows[0], sg_orders[0]),
-                                                         height=min_height, prominence=prominence, distance=distance,
-                                                         width=width)
-
-        background = copy.deepcopy(y)
-        for peak in range(len(peaks)):
-            for index in range(int(peaks[peak] - peak_properties["widths"][peak] * not_including_peak_width_multiplier),
-                               int(peaks[peak] + peak_properties["widths"][peak] * not_including_peak_width_multiplier),
-                               1):
-
-                try:
-                    m = (background[
-                             int(peaks[peak] + peak_properties["widths"][peak] * not_including_peak_width_multiplier)] -
-                         background[
-                             int(peaks[peak] - peak_properties["widths"][
-                                 peak] * not_including_peak_width_multiplier)]) / (int(
-                        peaks[peak] + peak_properties["widths"][peak] * not_including_peak_width_multiplier) - int(
-                        peaks[peak] - peak_properties["widths"][peak] * not_including_peak_width_multiplier))
-                except:
-                    m = 1
-                try:
-                    background[index] = background[int(
-                        peaks[peak] - peak_properties["widths"][peak] * not_including_peak_width_multiplier)] + (m * (
-                            index - int(
-                        peaks[peak] - peak_properties["widths"][peak] * not_including_peak_width_multiplier)))
-                except:
-                    break
-        background = scipy.signal.savgol_filter(background, sg_windows[1], sg_orders[1])
-        bg_subst_series = []
-        for entry in range(len(y)):
-            bg_subst_series.append(y[entry] - background[entry])
-        bg_subst_series = scipy.signal.savgol_filter(bg_subst_series, sg_windows[2], sg_orders[2])
-        return [bg_subst_series, background, peaks, peak_properties]
-
-    def is_within_deviation(curr_mass, requested_mass, mass_deviation):
-        return requested_mass - mass_deviation <= curr_mass <= requested_mass + mass_deviation
-
-    if requested_filter_mode == "AIF":
-        requested_ms_ms_mass = ""
-    if requested_filter_mode == "Full scan":
-        requested_ms_ms_mass = ""
-    if (mode == "as_mass") and (requested_ms_ms_mass == "") and (requested_filter_mode == "MS/MS"):
-        requested_ms_ms_mass = value
-    ms_ms_masses = []
-    rt_list = []
-    for element in f:
-        rt_list.append(element["scanList"]["scan"][0]["scan time"])
-    log_f_filename = ""
-    if not save_folder == "":
-        log_f_filename = save_folder + "Mass_spectrum_index" + str(value) + "_AdditionalInfo" + ".txt"
-        log_f = open(log_f_filename, "w")
-        log_f.write("given_value\t" + str(value) + "\n")
-        log_f.write("requested_filter\t" + str(requested_filter_mode) + "\n")
-        log_f.write("mode\t" + str(mode) + "\n")
-        log_f.write("requested_ms_ms_mass\t" + str(requested_ms_ms_mass) + "\n")
-        log_f.write("STARTING....................................................." + "\n")
-        log_f.close()
-    index = 0
-    start_index = 0
-    # mode == as_index, as_rt, as_mass
-    if mode == "as_rt":
-        change_index_value = 1
-        change_index_direction = "+"
-        index = 0
-
-        abs_err_list = []
-        for element in rt_list:
-            abs_err_list.append(abs(element - value))
-        index = abs_err_list.index(min(abs_err_list))
-        start_index = copy.deepcopy(index)
-
-        filter_mode = ""
-        while True:
-            if requested_filter_mode == "whatever":
-                break
-            filter = f[index]["scanList"]["scan"][0]["filter string"]
-            filter_mode = ""
-            ms_ms_masses = []
-            if (" d " in filter) and ("@hcd" in filter):
-                filter_mode = "MS/MS"
-                ms_ms_masses = []
-                filter_parsed = filter.split(" ")
-                filter_parsed = [x for x in filter_parsed if "hcd" in x]
-                for element in filter_parsed:
-                    ms_ms_masses.append(round(float(element.split("@")[0]), 2))
-            if (not " d " in filter) and (not "hcd" in filter):
-                filter_mode = "Full scan"
-            if (not " d " in filter) and ("hcd" in filter):
-                filter_mode = "AIF"
-
-            if (index >= len(f)-3) or (index <= 3):
-                if not save_folder == "":
-                    log_f = open(log_f_filename, "a")
-                    log_f.write(
-                        "INFO:\t" + "NOTHING WAS FOUND IN THE WHOLE CHROMATOGRAM! Index at boundaries. Returning..." + "\n")
-                    log_f.close()
-                print("NOTHING WAS FOUND IN THE WHOLE CHROMATOGRAM! Index at boundaries. Returning...")
-                return
-            if not filter_mode == requested_filter_mode:
-                if change_index_direction == "+":
-                    index = index + change_index_value
-                    change_index_direction = "-"
-                    change_index_value = change_index_value + 1
-                else:
-                    index = index - change_index_value
-                    change_index_direction = "+"
-                    change_index_value = change_index_value + 1
-                continue
-            if filter_mode == requested_filter_mode and requested_ms_ms_mass == "":
-                break
-            if (filter_mode == requested_filter_mode) and (round(requested_ms_ms_mass, 2) in ms_ms_masses):
-                if not save_folder == "":
-                    log_f = open(log_f_filename, "a")
-                    log_f.write("INFO:\t" + "FOUND MSMSSPECTRUM" + "\n")
-                    log_f.close()
-                print("FOUND MSMSSPECTRUM")
-                break
-            else:
-                if change_index_direction == "+":
-                    index = index + change_index_value
-                    change_index_direction = "-"
-                    change_index_value = change_index_value + 1
-                else:
-                    index = index - change_index_value
-                    change_index_direction = "+"
-                    change_index_value = change_index_value + 1
-
-    if mode == "as_index":
-        print("Value: " + str(value))
-        change_index_value = 1
-        change_index_direction = "+"
-        index = value
-        filter = f[index]["scanList"]["scan"][0]["filter string"]
-        filter_mode = ""
-        ms_ms_masses = []
-        if (" d " in filter) and ("@hcd" in filter):
-            filter_mode = "MS/MS"
-            filter_parsed = filter.split(" ")
-            filter_parsed = [x for x in filter_parsed if "hcd" in x]
-            for element in filter_parsed:
-                ms_ms_masses.append(round(float(element.split("@")[0]), 2))
-        if (not " d " in filter) and (not "hcd" in filter):
-            filter_mode = "Full scan"
-        if (not " d " in filter) and ("hcd" in filter):
-            filter_mode = "AIF"
-
-        if (not filter_mode == requested_filter_mode) and (not requested_filter_mode == "whatever"):
-            if not save_folder == "":
-                log_f = open(log_f_filename, "a")
-                log_f.write(
-                    "INFO:\t" + "Filter mode of the provided index does not match the requested filter mode! Adapting index to nearest spectrum that has requested filter mode!" + "\n")
-                log_f.close()
-            print(
-                "Filter mode of the provided index does not match the requested filter mode! Adapting index to nearest spectrum that has requested filter mode!")
-
-        start_index = copy.deepcopy(index)
-
-        while True:
-            if requested_filter_mode == "whatever":
-                break
-            filter = f[index]["scanList"]["scan"][0]["filter string"]
-            filter_mode = ""
-            ms_ms_masses = []
-            if (" d " in filter) and ("@hcd" in filter):
-                filter_mode = "MS/MS"
-                ms_ms_masses = []
-                filter_parsed = filter.split(" ")
-                filter_parsed = [x for x in filter_parsed if "hcd" in x]
-                for element in filter_parsed:
-                    ms_ms_masses.append(round(float(element.split("@")[0]), 2))
-            if (not " d " in filter) and (not "hcd" in filter):
-                filter_mode = "Full scan"
-            if (not " d " in filter) and ("hcd" in filter):
-                filter_mode = "AIF"
-
-            if (index >= len(f)-3) or (index <= 3):
-                if not save_folder == "":
-                    log_f = open(log_f_filename, "a")
-                    log_f.write(
-                        "INFO:\t" + "NOTHING WAS FOUND IN THE WHOLE CHROMATOGRAM! Index at boundaries. Returning..." + "\n")
-                    log_f.close()
-                print("NOTHING WAS FOUND IN THE WHOLE CHROMATOGRAM! Index at boundaries. Returning...")
-                return
-            if not filter_mode == requested_filter_mode:
-                if change_index_direction == "+":
-                    index = index + change_index_value
-                    change_index_direction = "-"
-                    change_index_value = change_index_value + 1
-                else:
-                    index = index - change_index_value
-                    change_index_direction = "+"
-                    change_index_value = change_index_value + 1
-                continue
-            if filter_mode == requested_filter_mode and requested_ms_ms_mass == "":
-                break
-            if (filter_mode == requested_filter_mode) and (round(requested_ms_ms_mass, 2) in ms_ms_masses):
-                if not save_folder == "":
-                    log_f = open(log_f_filename, "a")
-                    log_f.write("INFO:\t" + "FOUND MSMSSPECTRUM" + "\n")
-                    log_f.close()
-                print("FOUND MSMSSPECTRUM")
-                break
-            else:
-                if change_index_direction == "+":
-                    index = index + change_index_value
-                    change_index_direction = "-"
-                    change_index_value = change_index_value + 1
-                else:
-                    index = index - change_index_value
-                    change_index_direction = "+"
-                    change_index_value = change_index_value + 1
-
-    if mode == "as_mass":
-        change_index_value = 1
-        change_index_direction = "+"
-        xic = get_xic(f, value, mass_deviation, requested_filter_mode="Full scan")
-        dur = (60 * max(rt_list)) / len(xic[1])
-        bg_subst_int = do_bg_substraction(xic[1], dur)
-        peaks = scipy.signal.find_peaks(bg_subst_int[0], height=max(bg_subst_int[0]) / 10)
-        if not save_folder == "":
-            fig = matplotlib.figure.Figure()
-            ax = fig.subplots()
-            ax.plot(xic[0], bg_subst_int[0], label="BG subst. intensity")
-            ax.plot(xic[0], xic[1], label="Intensity")
-            ax.plot(xic[0], bg_subst_int[1], label="Background")
-            ax.legend()
-            ax.set_xlabel("RT / min")
-            ax.set_ylabel("intensity / a.u.")
-            ax.set_title("XIC of mass " + str(value))
-            matplotlib.rcParams.update({'figure.autolayout': True})
-            image_filepath = save_folder + "XIC_forMass" + str(index) + ".png"
-            fig.savefig(image_filepath, bbox_inches='tight')
-
-        if len(peaks[0]) >= 2:
-            print(
-                "ATTENTION: There are more than 1 peak for this mass!!! The program will take the highest value it can find in the xic!!")
-            print("Press enter to continue...")
-            input()
-        index = xic[1].index(max(xic[1]))
-        index = xic[2][index]
-        filter_mode = ""
-
-        start_index = copy.deepcopy(index)
-
-        while True:
-            if requested_filter_mode == "whatever":
-                break
-            filter = f[index]["scanList"]["scan"][0]["filter string"]
-            filter_mode = ""
-            ms_ms_masses = []
-            if (" d " in filter) and ("@hcd" in filter):
-                filter_mode = "MS/MS"
-                ms_ms_masses = []
-                filter_parsed = filter.split(" ")
-                filter_parsed = [x for x in filter_parsed if "hcd" in x]
-                for element in filter_parsed:
-                    ms_ms_masses.append(round(float(element.split("@")[0]), 2))
-            if (not " d " in filter) and (not "hcd" in filter):
-                filter_mode = "Full scan"
-            if (not " d " in filter) and ("hcd" in filter):
-                filter_mode = "AIF"
-
-            if (index >= len(f)-3) or (index <= 3):
-                if not save_folder == "":
-                    log_f = open(log_f_filename, "a")
-                    log_f.write(
-                        "INFO:\t" + "NOTHING WAS FOUND IN THE WHOLE CHROMATOGRAM! Index at boundaries. Returning..." + "\n")
-                    log_f.close()
-                print("NOTHING WAS FOUND IN THE WHOLE CHROMATOGRAM! Index at boundaries. Returning...")
-                return
-            if not filter_mode == requested_filter_mode:
-                if change_index_direction == "+":
-                    index = index + change_index_value
-                    change_index_direction = "-"
-                    change_index_value = change_index_value + 1
-                else:
-                    index = index - change_index_value
-                    change_index_direction = "+"
-                    change_index_value = change_index_value + 1
-                continue
-            if filter_mode == requested_filter_mode and requested_ms_ms_mass == "":
-                break
-            if (filter_mode == requested_filter_mode) and (round(requested_ms_ms_mass, 2) in ms_ms_masses):
-                if not save_folder == "":
-                    log_f = open(log_f_filename, "a")
-                    log_f.write("INFO:\t" + "FOUND MSMSSPECTRUM" + "\n")
-                    log_f.close()
-                print("FOUND MSMSSPECTRUM")
-                break
-            else:
-                if change_index_direction == "+":
-                    index = index + change_index_value
-                    change_index_direction = "-"
-                    change_index_value = change_index_value + 1
-                else:
-                    index = index - change_index_value
-                    change_index_direction = "+"
-                    change_index_value = change_index_value + 1
-
-    masses = list(f[index]["m/z array"])
-    intensities = list(f[index]["intensity array"])
-    filter = f[index]["scanList"]["scan"][0]["filter string"]
-    filter_mode = ""
-    if (" d " in filter) and ("@hcd" in filter):
-        filter_mode = "MS/MS"
-    if (not " d " in filter) and (not "hcd" in filter):
-        filter_mode = "Full scan"
-    if (not " d " in filter) and ("hcd" in filter):
-        filter_mode = "AIF"
-    print(filter_mode)
-    print("MS level of the mass spectrum: " + str(f[index]["ms level"]))
-    print(filter)
-    ms_ms_masses = []
-    filter_parsed = filter.split(" ")
-    filter_parsed = [x for x in filter_parsed if "hcd" in x]
-    for element in filter_parsed:
-        ms_ms_masses.append((float(element.split("@")[0])))
-    print(ms_ms_masses)
-    print(index)
-    print(rt_list[index])
-    print(f[index]["scanList"]["scan"][0]["scan time"])
-    if not save_folder == "":
-        fig = matplotlib.figure.Figure()
-        ax = fig.subplots()
-        ax.bar(masses, intensities, label="measured ions")
-        try:
-            ax.get_legend().remove()
-        except:
-            pass
-        ax.set_xlabel("masses / Da")
-        ax.set_ylabel("intensity / a.u.")
-        ax.set_title("Mode:" + str(filter_mode) + "; Index: " + str(index) + "; RT: " + str(
-            round(rt_list[index], 2)) + ";\nFilter: " + str(filter) + ";\nMS/MS masses: " + str(ms_ms_masses))
-        matplotlib.rcParams.update({'figure.autolayout': True})
-        image_filepath = save_folder + "Mass_spectrum_index" + str(index) + "_" + str(
-            filter_mode.replace("/", "")) + "_" + str(ms_ms_masses) + ".png"
-        fig.savefig(image_filepath, bbox_inches='tight')
-        metadata = PIL.PngImagePlugin.PngInfo()
-        metadata.add_text("masses", str(masses))
-        metadata.add_text("intensities", str(intensities))
-        metadata.add_text("index", str(index))
-        metadata.add_text("orig_file_entry_for_index", str(f[index]))
-        metadata.add_text("mode", str(filter_mode))
-        metadata.add_text("filter", str(filter))
-        metadata.add_text("msms_masses", str(ms_ms_masses))
-        target_image = PIL.Image.open(image_filepath)
-        target_image.save(image_filepath, pnginfo=metadata)
-
-        old_log_f = open(log_f_filename, "r")
-        lines = old_log_f.readlines()
-        old_log_f.close()
-        pathlib.Path(log_f_filename).unlink()
-        log_f_filename = save_folder + "Mass_spectrum_requestedValue" + str(value) + "_trueIndex" + str(
-            index) + "_" + str(filter_mode.replace("/", "")) + "_AdditionalInfo" + ".txt"
-        log_f = open(log_f_filename, "w")
-        for entry in lines:
-            log_f.write(entry)
-        log_f.write("===================================================================================\n")
-        log_f.write("Deviation_to_initial_index\t" + str(abs(index - start_index)) + "\n")
-        log_f.write("Index\t" + str(index) + "\n")
-        log_f.write("Filter mode\t" + str(filter_mode) + "\n")
-        log_f.write("Filter\t" + str(filter) + "\n")
-        log_f.write("MS_level\t" + str(f[index]["ms level"]) + "\n")
-        log_f.write("MS/MS_masses\t" + str(ms_ms_masses) + "\n")
-        log_f.write("===================================================================================\n")
-        log_f.write("Masses\t" + str(masses) + "\n")
-        log_f.write("Intensities\t" + str(intensities) + "\n")
-        log_f.write("Header_of_spectrum\t" + str(f[index]) + "\n")
-        log_f.close()
-
-    return [masses, intensities, index, f[index], f[index]["ms level"], filter, filter_mode, ms_ms_masses]
-
-
-def get_formula_from_cache(cache_folder, mass, max_ppm_dev, max_unlikeliness_of_formula=10, min_unlikelyness_of_formula=0, file_basename="formulas_for_mass_", filetype=".txt.gz", max_mass=1200, remove_unlogical_formulas=False):
+def get_formula_from_cache(cache_folder, mass, max_ppm_dev, max_unlikeliness_of_formula=10, min_unlikelyness_of_formula=0, file_basename="formulas_for_mass_", filetype=".txt.gz", max_mass=1200, remove_unlogical_formulas=False, debug_output=True):
+    if debug_output == True:
+        print("Starting formula generation from cache...")
     if mass >= max_mass:
         #on the fly prediction
         result = get_one_formula(mass, max_dev=0.005, charge_of_measured_mass=0, dbe_range=(-10, 150), c_oxidation_state_range=(-4, 4),
@@ -479,8 +86,9 @@ def get_formula_from_cache(cache_folder, mass, max_ppm_dev, max_unlikeliness_of_
                 all_dict.update(mydict)
             except Exception as e:
                 print("Error with formula determination! " + str(e))
-                # print(traceback.format_exc())
-                print(all_dict)
+                print(traceback.format_exc())
+                if debug_output == True:
+                    print(all_dict)
                 continue
         all_dict = {f: dev for f, dev in all_dict.items() if abs(dev) <= max_ppm_dev}
         all_dict = {k: v for k, v in sorted(all_dict.items(), key=lambda item: abs(item[1]), reverse=False)}
@@ -506,42 +114,25 @@ def get_formula_from_cache(cache_folder, mass, max_ppm_dev, max_unlikeliness_of_
                 all_dict.update(mydict)
             except Exception as e:
                 print("Error with formula determination! " + str(e))
-                #print(traceback.format_exc())
-                print(all_dict)
+                print(traceback.format_exc())
+                if debug_output == True:
+                    print(all_dict)
                 continue
         all_dict = {f: dev for f, dev in all_dict.items() if abs(dev) <= max_ppm_dev}
         all_dict = {k: v for k, v in sorted(all_dict.items(), key=lambda item: abs(item[1]), reverse=False)}
-
     formula_dict_list = [get_formula_to_dict(f) for f, dev in all_dict.items()]
     formula_dict_list = [dict(t) for t in {tuple(d.items()) for d in formula_dict_list}]
     formula_dict_list = [get_formula_string_from_dict(f) for f in formula_dict_list]
     all_dict = {f: dev for f, dev in all_dict.items() if f in formula_dict_list}
+
     if remove_unlogical_formulas == True:
         for formula in list(all_dict.keys()):
             curr_formula_dict = get_formula_to_dict(formula)
-            curr_unlikelyness_of_formula = 0
-
-
-            if (curr_formula_dict.get("H", 0) + curr_formula_dict.get("Cl", 0) + curr_formula_dict.get("F", 0) + curr_formula_dict.get("Br", 0) + curr_formula_dict.get("I", 0)) > ((curr_formula_dict.get("C", 0) * 3) + (curr_formula_dict.get("N", 0)*2) + (curr_formula_dict.get("O", 0)*1) + (curr_formula_dict.get("S", 0)*2) + (curr_formula_dict.get("P", 0)*2) + 2):
-                curr_unlikelyness_of_formula += 2
-            if curr_formula_dict.get("C", 999)*4 < curr_formula_dict.get("O", 0):
-                curr_unlikelyness_of_formula += 1
-
-            common_atoms = set(curr_formula_dict.keys()).intersection(["Al", "As", "B", "Be", "Ca", "Co", "Cr", "Cu", "Fe", "Ge", "K", "Li", "Mg", "Mn", "Mo", "Na", "Ni", "Sb", "Se", "Si", "Zn"])
-            if len(common_atoms) >= 1:
-                curr_unlikelyness_of_formula += 1
-
-            if curr_formula_dict.get("O", 0) > (curr_formula_dict.get("C", 0)*3 + curr_formula_dict.get("S", 0)*4 + curr_formula_dict.get("N", 0)*2 + curr_formula_dict.get("P", 0)*3 + 2):
-                curr_unlikelyness_of_formula += 1
-
-            if curr_formula_dict.get("P", 0)*3 > curr_formula_dict.get("O", 0):
-                curr_unlikelyness_of_formula += 2
-
-            if curr_formula_dict.get("P", 0) > 2:
-                curr_unlikelyness_of_formula += 2
-
-            if curr_unlikelyness_of_formula >= max_unlikeliness_of_formula or curr_unlikelyness_of_formula < min_unlikelyness_of_formula:
-                print("Unlikelyness of current formula: " + str(curr_unlikelyness_of_formula) + "Formula: " + str(formula))
+            f_likelyness = calculate_likelyhood_of_formula_dict(curr_formula_dict)
+            f_unlikelyness = -1 * f_likelyness
+            if f_unlikelyness >= max_unlikeliness_of_formula or f_unlikelyness < min_unlikelyness_of_formula:
+                if debug_output == True:
+                    print("Unlikelyness of current formula: " + str(f_unlikelyness) + "Formula: " + str(formula))
                 del all_dict[formula]
 
     return [mass, all_dict]
@@ -714,56 +305,71 @@ def get_one_formula(measured_mass, max_dev=0.005, charge_of_measured_mass=-1, db
     return [mass, formulas]
 
 
+def compare_peak_shape_similarity(xic1, xic2, peak_rt, peakwidth=10, debug_output=False):
+    index = xic1[0].index(min(xic1[0], key=lambda x: abs(peak_rt - x)))
+    intensity1_at_peak_rt = xic1[1][index]
+    if intensity1_at_peak_rt <= 0:
+        intensity1_at_peak_rt = 0.000001
+    intensity2_at_peak_rt = xic2[1][index]
+    if intensity2_at_peak_rt <= 0:
+        intensity2_at_peak_rt = 0.000001
+    try:
+        peakintensity1 = xic1[1][(index - peakwidth):(index + peakwidth)]
+        peak1_rt = xic1[0][int(index - peakwidth):int(index + peakwidth)]
+        peakintensity2 = xic2[1][int(index - peakwidth):int(index + peakwidth)]
+        peak2_rt = xic2[0][int(index - peakwidth):int(index + peakwidth)]
 
-
-##NOT WORKING PROPERLY. USE summarize_mass_intensity_dict INSTEAD
-def summarize_mass_intensity_dict_with_deviation(dictio, deviation=20, noise=5000):
-    print(len(dictio))
-    dictio = {k: v for k, v in dictio.items() if v >= 0.00001}
-    old_masses_list = list(dictio.keys())
-    old_abundances_list = list(dictio.values())
-    new_masses_list = []
-    new_abundances_list = []
-    for entry in range(len(old_masses_list)):
+        neighbour_list1 = xic1[1][int(index - 3 * peakwidth):int(index + 3 * peakwidth)]
+        neighbour_list1 = [neighbour_list1[i] for i in range(len(neighbour_list1)) if (i < len(neighbour_list1) / 3) or (i > ((len(neighbour_list1) / 3) + (len(neighbour_list1) / 2)))]
+        average_surrounding1 = sum(neighbour_list1) / len(neighbour_list1)
         try:
-            mass_dev_list = [abs(((m - old_masses_list[entry]) / old_masses_list[entry]) * 1000000) for m in old_masses_list]
-            curr_mass_plus_deviation_list = [old_masses_list[m] for m in range(len(old_masses_list)) if
-                                             mass_dev_list[m] <= deviation]
-            curr_abundance_plus_deviation_list = [old_abundances_list[m] for m in range(len(old_masses_list)) if
-                                                  mass_dev_list[m] <= deviation]
+            peakintensity1 = [((i - average_surrounding1) / (xic1[1][index] - average_surrounding1)) for i in peakintensity1]
+        except:
+            max_peakint1 = max(peakintensity1)
+            if max_peakint1 == 0:
+                max_peakint1 = 0.001
+            peakintensity1 = [((i - average_surrounding1) / (max_peakint1)) for i in peakintensity1]
 
-            if not curr_mass_plus_deviation_list[curr_abundance_plus_deviation_list.index(max(curr_abundance_plus_deviation_list))] in new_masses_list:
-                new_masses_list.append(curr_mass_plus_deviation_list[curr_abundance_plus_deviation_list.index( max(curr_abundance_plus_deviation_list))])
-                new_abundances_list.append(sum(curr_abundance_plus_deviation_list))
-
-        except Exception as e:
-            print("EXCEPTION IN simulate_isotope_pattern_of_formula()!!!")
-            print(e)
-            break
-    outdict = dict(zip(new_masses_list, new_abundances_list))
-
-    new_masses_list = []
-    new_abundances_list = []
-    for entry in range(len(outdict)):
+        neighbour_list2 = xic2[1][int(index - 3 * peakwidth):int(index + 3 * peakwidth)]
+        neighbour_list2 = [neighbour_list2[i] for i in range(len(neighbour_list2)) if (i < len(neighbour_list2) / 3) or (i > ((len(neighbour_list2) / 3) + (len(neighbour_list2) / 2)))]
+        average_surrounding2 = sum(neighbour_list2) / len(neighbour_list2)
         try:
-            mass_dev_list = [abs(((m - list(outdict.keys())[entry]) / list(outdict.keys())[entry]) * 1000000) for m in old_masses_list]
-            curr_mass_plus_deviation_list = [old_masses_list[m] for m in range(len(old_masses_list)) if mass_dev_list[m] <= deviation]
-            curr_abundance_plus_deviation_list = [old_abundances_list[m] for m in range(len(old_masses_list)) if mass_dev_list[m] <= deviation]
-            cumm_mass = 0
-            cumm_abundance = sum(curr_abundance_plus_deviation_list)
-            for entry in range(len(curr_mass_plus_deviation_list)):
-                cumm_mass = cumm_mass + (curr_mass_plus_deviation_list[entry] * curr_abundance_plus_deviation_list[entry])
-            cumm_mass = cumm_mass / cumm_abundance
+            peakintensity2 = [((i - average_surrounding2) / (xic2[1][index] - average_surrounding2)) for i in peakintensity2]
+        except:
+            max_peakint2 = max(peakintensity2)
+            if max_peakint2 == 0:
+                max_peakint2 = 0.0001
+            peakintensity2 = [[((i - average_surrounding2) / (max_peakint2)) for i in peakintensity2]]
+    except:
+        if index - peakwidth <= 2:
+            peakwidth = index - 2
+        if index + peakwidth >= len(xic1[1]):
+            peakwidth = (len(xic1[1]) - index - 2)
+        peakintensity1 = xic1[1][(index - peakwidth):(index + peakwidth)]
+        peakintensity1 = [i / intensity1_at_peak_rt for i in peakintensity1]
+        peak1_rt = xic1[0][int(index - peakwidth):int(index + peakwidth)]
+        peakintensity2 = xic2[1][int(index - peakwidth):int(index + peakwidth)]
+        peakintensity2 = [i / intensity2_at_peak_rt for i in peakintensity2]
+        peak2_rt = xic2[0][int(index - peakwidth):int(index + peakwidth)]
 
-            new_masses_list.append(cumm_mass)
-            new_abundances_list.append(cumm_abundance)
+    try:
+        P = np.array([peak1_rt, peakintensity1]).T
+        Q = np.array([peak2_rt, peakintensity2]).T
+        area = similaritymeasures.area_between_two_curves(P, Q)
+    except:
+        area = -1
 
-        except Exception as e:
-            print("EXCEPTION IN simulate_isotope_pattern_of_formula()!!!")
-            print(e)
-            break
-    outdict = dict(zip(new_masses_list, new_abundances_list))
-    return outdict
+    if not (isinstance(area, float) or isinstance(area, int)):
+        try:
+            area = float(area)
+        except:
+            area = -1
+    if area == np.nan or (str(area).lower() == "nan"):
+        area = -1
+        if debug_output == True:
+            print("area was nan. Chaning area to: " + str(area))
+
+    return area, peak1_rt, peakintensity1, peak2_rt, peakintensity2
 
 
 def do_bg_substraction(y, not_including_peak_width_multiplier=3, peakwidth=10):
@@ -811,7 +417,261 @@ def do_bg_substraction(y, not_including_peak_width_multiplier=3, peakwidth=10):
     return [bg_subst_series, background, peaks, peak_properties]
 
 
-def summarize_mass_intensity_dict(dictio, deviation=30):
+def get_mode_of_spec(filter_string):
+    if " d " in filter_string and "@hcd" in filter_string:
+        ms_ms_masses = []
+        filter_parsed = filter_string.split(" ")
+        filter_parsed = [x for x in filter_parsed if "hcd" in x]
+        for element in filter_parsed:
+            ms_ms_masses.append(round(float(element.split("@")[0]), 2))
+        return "MS/MS"
+    elif " d " not in filter_string and "hcd" not in filter_string:
+        return "Full scan"
+    elif " d " not in filter_string and "hcd" in filter_string:
+        return "AIF"
+
+
+def min_deviation_between_list_elements(input_list):
+    # Sort the list in ascending order
+    sorted_list = sorted(input_list)
+    # Initialize the minimum deviation with a large value
+    min_deviation = float('inf')
+    # Initialize the pair of values where the minimum deviation occurs
+    min_deviation_values = None
+    # Iterate over the sorted list and compare adjacent elements
+    for i in range(len(sorted_list) - 1):
+        deviation = abs(sorted_list[i + 1] - sorted_list[i])
+        if deviation < min_deviation:
+            min_deviation = deviation
+            min_deviation_values = (sorted_list[i], sorted_list[i + 1])
+    return [min_deviation, min_deviation_values]
+
+
+def get_best_approx_for_ppm_spacing_within_peak(mass_list, worst_expected_ppm_deviation=20):
+    mass_list = sorted(mass_list)
+    ppm_spacing_list = [(((mass_list[i+1] - mass_list[i]) / mass_list[i]) * 1000000) for i in range(len(mass_list)-1)]
+    ppm_spacing_list = [ppm for ppm in ppm_spacing_list if ppm < worst_expected_ppm_deviation]
+    avg_ppm = sum(ppm_spacing_list) / len(ppm_spacing_list)
+    return avg_ppm
+
+def get_peaks_in_xy_series(x, y, sg_window=10, sg_order=3):
+        if len(x) != len(y):
+            print("Error in MS_functions.get_peaks_in_xy_series(): x and y have different lengths!")
+            return None
+        y = scipy.signal.savgol_filter(y, sg_window, sg_order, mode="nearest")
+        peak_properties = scipy.signal.find_peaks(y, height=max(y)/100, distance=2, prominence=max(y)/100, width=(2, len(y)/10))
+        identified_peaks = []
+        for element in range(len(peak_properties[1]["peak_heights"])):
+            one_peak = []
+            one_peak.append(x[int(peak_properties[1]["left_ips"][element] + (peak_properties[1]["widths"][element]/2))])
+            one_peak.append(peak_properties[1]["peak_heights"][element])
+            one_peak.append(x[int(peak_properties[1]["left_ips"][element])])
+            one_peak.append(x[int(peak_properties[1]["right_ips"][element])])
+            one_peak.append(peak_properties[1]["prominences"][element])
+            identified_peaks.append(one_peak)
+        #[[time, height, lefttime, righttime, prominence], [time, height, left, right, prominence], ...]
+        return identified_peaks
+
+
+def summarize_mass_intensity_dict(dictio, deviation=11, debug_output=True):
+        dictio = {k: v for k, v in dictio.items() if v > 0}
+        if debug_output == True:
+            print("summarizing dict according to new method. old length of start dictio:" + str(len(dictio)))
+        #sort the dictio by its keys
+        dictio = dict(sorted(dictio.items(), key=lambda item: item[0]))
+        old_masses_list = list(dictio.keys())
+        old_abundances_list = list(dictio.values())
+        new_masses_list = []
+        new_abundances_list = []
+
+        best_approx_ppm_spacing_within_peak = get_best_approx_for_ppm_spacing_within_peak(old_masses_list)
+        if debug_output == True:
+            print("best approx for ppm spacing within peak: " + str(best_approx_ppm_spacing_within_peak))
+
+        while len(old_masses_list) > 0:
+            try:
+                remove_all_lower = False
+                remove_all_upper = False
+                index_of_highest_abundance = old_abundances_list.index(max(old_abundances_list))
+                curr_mass = old_masses_list[index_of_highest_abundance]
+                mass_lower_border = curr_mass - 4*((deviation*curr_mass)/1000000)
+                mass_upper_border = curr_mass + 4*((deviation*curr_mass)/1000000)
+                iteration_step_lower = 0
+                integration_step_upper = 0
+
+                last_existing_mass_within_border = curr_mass
+                last_abundance = old_abundances_list[index_of_highest_abundance]
+                expected_min_spacing_between_measurement_points = (best_approx_ppm_spacing_within_peak * curr_mass) / 1000000
+                try:
+                    while (mass_lower_border < old_masses_list[index_of_highest_abundance-(iteration_step_lower+1)]) and \
+                            (last_existing_mass_within_border - old_masses_list[index_of_highest_abundance-(iteration_step_lower+1)] <= 3.2*expected_min_spacing_between_measurement_points) and \
+                                (old_abundances_list[index_of_highest_abundance-(iteration_step_lower+1)] <= (1.1 * last_abundance)):
+
+                        iteration_step_lower += 1
+                        last_existing_mass_within_border = old_masses_list[index_of_highest_abundance - iteration_step_lower]
+                        last_abundance = old_abundances_list[index_of_highest_abundance - iteration_step_lower]
+                except IndexError:
+                    remove_all_lower = True
+                    iteration_step_lower = 0
+
+                
+                last_existing_mass_within_border = curr_mass
+                last_abundance = old_abundances_list[index_of_highest_abundance]
+                try:
+                    while (mass_upper_border > old_masses_list[index_of_highest_abundance+integration_step_upper+1]) and \
+                            (old_masses_list[index_of_highest_abundance+integration_step_upper+1] - last_existing_mass_within_border <= 3.2*expected_min_spacing_between_measurement_points) and \
+                                (old_abundances_list[index_of_highest_abundance+integration_step_upper+1] <= (1.1 * last_abundance)):
+                        integration_step_upper += 1
+                        last_existing_mass_within_border = old_masses_list[index_of_highest_abundance + integration_step_upper]
+                        last_abundance = old_abundances_list[index_of_highest_abundance + integration_step_upper]
+                except IndexError:
+                    remove_all_upper = True
+                    integration_step_upper = 0
+                
+                if remove_all_lower == True and remove_all_upper == True:
+                    break
+                if remove_all_upper:
+                    summed_intensity = sum([old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, len(old_abundances_list), 1)])
+                    weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, len(old_abundances_list), 1)]) / summed_intensity
+                    if summed_intensity >= 1:
+                        new_masses_list.append(weighted_mass_average)
+                        new_abundances_list.append(summed_intensity)
+                    old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, len(old_masses_list), 1)]
+                    old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, len(old_abundances_list), 1)]
+                    continue
+                if remove_all_lower:
+                    summed_intensity = sum([old_abundances_list[i] for i in range(0, index_of_highest_abundance+integration_step_upper+1, 1)])
+                    weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(0, index_of_highest_abundance+integration_step_upper+1, 1)]) / summed_intensity
+                    if summed_intensity >= 1:
+                        new_masses_list.append(weighted_mass_average)
+                        new_abundances_list.append(summed_intensity)
+                    old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(0, index_of_highest_abundance+integration_step_upper+1, 1)]
+                    old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(0, index_of_highest_abundance+integration_step_upper+1, 1)]
+                    continue
+
+                if iteration_step_lower == 0 and integration_step_upper == 0:
+                    summed_intensity = old_abundances_list[index_of_highest_abundance]
+                    weighted_mass_average = old_masses_list[index_of_highest_abundance]
+                    if summed_intensity >= 1:
+                        new_masses_list.append(weighted_mass_average)
+                        new_abundances_list.append(summed_intensity)
+                    old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if not i == index_of_highest_abundance ]
+                    old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if not i == index_of_highest_abundance ]
+                    continue
+
+                summed_intensity = sum([old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper+1, 1)])
+                weighted_mass_average = sum([old_masses_list[i] * old_abundances_list[i] for i in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper+1, 1)]) / summed_intensity
+                if summed_intensity >= 1:
+                    new_masses_list.append(weighted_mass_average)
+                    new_abundances_list.append(summed_intensity)
+                old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper+1, 1)]
+                old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(index_of_highest_abundance-iteration_step_lower, index_of_highest_abundance+integration_step_upper+1, 1)]
+            except Exception as e:
+                print("EXCEPTION IN summarize_mass_intensity_dict()!!!")
+                print(traceback.format_exc())
+                break
+        outdict = dict(zip(new_masses_list, new_abundances_list))
+        if debug_output == True:
+            print("New length of summarized dictio: " + str(len(outdict)))
+        return outdict
+
+
+def calculate_likelyhood_of_formula_dict(f_dict, charge_of_measured_mass=None, score_subst_rdbe_non_integer=10, score_subst_senior_rule=10, debug_output=False):
+    formula_likelyness = 0
+    try:
+        # X/C ratio check from #https://pmc.ncbi.nlm.nih.gov/articles/PMC1851972/ The numbers are representing 99.7% of all available molecular formulas.
+        if "C" in list(f_dict.keys()):
+            if (f_dict.get("H", 0) / f_dict.get("C", 0) < 0.2) or (f_dict.get("H", 0) / f_dict.get("C", 0) > 3.1):
+                formula_likelyness = formula_likelyness -40
+            if (f_dict.get("F", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("F", 0) / f_dict.get("C", 0) > 1.5):
+                formula_likelyness = formula_likelyness - 40
+            if (f_dict.get("Cl", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("Cl", 0) / f_dict.get("C", 0) > 0.8):
+                formula_likelyness = formula_likelyness - 40
+            if (f_dict.get("Br", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("Br", 0) / f_dict.get("C", 0) > 0.8):
+                formula_likelyness = formula_likelyness - 40
+            if (f_dict.get("N", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("N", 0) / f_dict.get("C", 0) > 1.3):
+                formula_likelyness = formula_likelyness - 40
+            if (f_dict.get("O", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("O", 0) / f_dict.get("C", 0) > 3):
+                formula_likelyness = formula_likelyness - 40
+            if (f_dict.get("P", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("P", 0) / f_dict.get("C", 0) > 0.3):
+                formula_likelyness = formula_likelyness - 40
+            if (f_dict.get("S", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("S", 0) / f_dict.get("C", 0) > 0.8):
+                formula_likelyness = formula_likelyness - 40
+            if (f_dict.get("Si", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("Si", 0) / f_dict.get("C", 0) > 0.5):
+                formula_likelyness = formula_likelyness - 40
+
+        heteroatom_count = float(f_dict.get("O", 0)) + float(f_dict.get("N", 0)) + float(f_dict.get("S", 0)) + float(f_dict.get("P", 0))
+        if heteroatom_count > 5 and f_dict.get("C", 0) <= int(heteroatom_count / 4):
+            formula_likelyness = formula_likelyness - float((heteroatom_count / 4) - f_dict.get("C", 0)) * 50
+
+        if ("C" in list(f_dict.keys())) and ("N" in list(f_dict.keys())):
+            if int(f_dict["N"]) > 2 and (int(f_dict["C"]) / int(f_dict["N"]) <= 4):
+                formula_likelyness = formula_likelyness - ((float(f_dict["N"]) - 2) ** 2) * 50
+
+        if ("C" in list(f_dict.keys())) and ("H" in list(f_dict.keys())):
+            if (float(f_dict["H"]) / float(f_dict["C"]) >= 2):
+                formula_likelyness = formula_likelyness - (((float(f_dict["H"]) / float(f_dict["C"])) - 2) ** 3) * 50
+                formula_likelyness = formula_likelyness - ((float(f_dict.get("N", 0)) ** 2) * 50)
+                formula_likelyness = formula_likelyness - ((float(f_dict.get("N", 0)) ** 2) * 50)
+
+        if ("P" in list(f_dict.keys())):
+            if (float(f_dict.get("P", 0)) * 3.1) >= float(f_dict.get("O", 0)):
+                formula_likelyness = formula_likelyness - (((float(f_dict.get("P", 0)) * 3) / float(f_dict.get("O", 1))) ** 4) * 250
+
+        if 2 < f_dict.get("C", 0) < heteroatom_count:
+            formula_likelyness = formula_likelyness - ((heteroatom_count - float(f_dict.get("C", 0))) ** 2) * 50
+
+        dbe = calc_dbe(f_dict)
+
+        if dbe < 0:
+            score_substract = (abs(dbe + 2) * 50) ** 3
+        elif (dbe - f_dict.get("O", 0)) > 7:
+            score_substract = abs(dbe - f_dict.get("O", 0) - 7) * 50
+        else:
+            score_substract = 0
+        if not charge_of_measured_mass == None:
+            if charge_of_measured_mass < 0:
+                dbe = dbe + (charge_of_measured_mass * 0.5)
+        if dbe - 1 > (get_mass_of_most_abundant_isotopologue_formula(f_dict) * (62 / 1000)):  # Senior Rule
+            score_substract += score_subst_senior_rule
+            if debug_output == True:
+                print("Senior rule of formula: "+ str(f_dict) + " not fulfilled.")
+        if not dbe - int(dbe) == 0:
+            score_substract += score_subst_rdbe_non_integer
+            if debug_output == True:
+                print("RDBE rule of formula: " + str(f_dict) + " not fulfilled.")
+
+        # https://pmc.ncbi.nlm.nih.gov/articles/PMC1851972/
+        # Element ratios
+
+        formula_likelyness = formula_likelyness - score_substract
+    except Exception as e:
+        print("ERROR in formula score likelyhood: " + str(e))
+        print(traceback.format_exc())
+        formula_likelyness = 0
+
+    return formula_likelyness
+
+
+def get_mass_of_most_abundant_isotopologue_formula(formula):
+    if len(formula) == 0:
+        return None
+    import pyteomics.mass
+    isotopologues = pyteomics.mass.mass.isotopologues(formula)
+    isotopologues_list = []
+    while True:
+        try:
+            isotopologues_list.append(next(isotopologues))
+        except:
+            break
+    abundance_dict = {}
+    for entry in isotopologues_list:
+        abundance_dict[pyteomics.mass.mass.calculate_mass(entry)] = pyteomics.mass.mass.isotopic_composition_abundance(entry)
+    abundance_dict = {m: a for m, a in abundance_dict.items() if a > 0.0001}
+    return list(abundance_dict.keys())[0]
+
+
+def summarize_mass_intensity_dict_for_isotopo_simulation(dictio, deviation=30, debug_output=True):
     dictio = dict(sorted(dictio.items(), key=lambda item: item[0]))
     old_masses_list = list(dictio.keys())
     old_abundances_list = list(dictio.values())
@@ -879,14 +739,14 @@ def summarize_mass_intensity_dict(dictio, deviation=30):
             old_masses_list = [old_masses_list[i] for i in range(len(old_masses_list)) if i not in range(index_of_highest_abundance - iteration_step_lower, index_of_highest_abundance + iteration_step_upper + 1, 1)]
             old_abundances_list = [old_abundances_list[i] for i in range(len(old_abundances_list)) if i not in range(index_of_highest_abundance - iteration_step_lower, index_of_highest_abundance + iteration_step_upper + 1, 1)]
         except Exception as e:
-            print("EXCEPTION IN summarize_mass_intensity_dict()!!!")
+            print("EXCEPTION IN summarize_mass_intensity_dict_for_isotopo_simulation()!!!")
             print(traceback.format_exc())
-            print(e)
             break
     outdict = dict(zip(new_masses_list, new_abundances_list))
     return outdict
 
-def simulate_isotope_pattern_of_formula(formula, mass_resolution_ppm=10):
+
+def simulate_isotope_pattern_of_formula(formula, mass_resolution_ppm=10, debug_output=False):
     if len(formula) == 0:
         return None
     import pyteomics.mass
@@ -901,12 +761,16 @@ def simulate_isotope_pattern_of_formula(formula, mass_resolution_ppm=10):
     for entry in isotopologues_list:
         abundance_dict[pyteomics.mass.mass.calculate_mass(entry)] = pyteomics.mass.mass.isotopic_composition_abundance(entry)
     abundance_dict = {m: a for m, a in abundance_dict.items() if a > 0.0001}
-    print(abundance_dict)
+    if debug_output == True:
+        print("Abundance dict for formula " + str(formula) + ":  " + str(abundance_dict))
     try:
-        abundance_dict = summarize_mass_intensity_dict(abundance_dict, deviation=mass_resolution_ppm)
+        abundance_dict = summarize_mass_intensity_dict_for_isotopo_simulation(abundance_dict, deviation=mass_resolution_ppm, debug_output=debug_output)
+        abundance_dict = dict(sorted(abundance_dict.items(), key=lambda x: x[1], reverse=True))
     except Exception as e:
         print("EXCEPTION IN simulate_isotope_pattern_of_formula()!!!")
-        print(e)
+        print(traceback.format_exc())
+        abundance_dict = dict(sorted(abundance_dict.items(), key=lambda x: x[1], reverse=True))
+    
     return abundance_dict
 
 
@@ -954,6 +818,20 @@ def get_formula_to_dict(formula_string):
 
 
 def get_formula_string_from_dict(formula_dict):
+    if isinstance(formula_dict, str):
+        try:
+            eventual_formula_dict = ast.literal_eval(formula_dict)
+            if isinstance(eventual_formula_dict, dict):
+                formula_dict = eventual_formula_dict
+            else:
+                pass
+        except:
+            pass
+    if isinstance(formula_dict, str):
+        try:
+            formula_dict = get_formula_to_dict(formula_dict)
+        except:
+            pass
     if len(formula_dict) == 0:
         return ""
     return "".join([str(a) + str(n) for a, n in formula_dict.items()])
@@ -967,7 +845,8 @@ def read_summary_to_df(filepath, sep="\t", colnames=("MASS", "FORMULA", "INDEX",
         try:
             new_colnames.append(colnames[entry])
         except Exception as e:
-            print("Error setting columnames: " + str(e))
+            print("Error setting columnames in read_summary_to_df(): " + str(e))
+            print(traceback.format_exc())
             new_colnames.append(entry)
     df.columns = new_colnames
     return df
