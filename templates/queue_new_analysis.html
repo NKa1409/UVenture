@@ -18,6 +18,7 @@
 
     <form action="/queue_new_analysis" method="post" enctype="multipart/form-data">
         <div class="form-group" style="margin-bottom: 20px;">
+            <span title="Choose the MS file for which you want to conduct the analysis.&#10;You can upload new MS files @ the corresponding page.&#10;Files must be uploaded as .mzML files.">?</span>
             <label for="fileSelect">Select a file:</label>
             <select id="fileSelect" name="fileselection">
                 {% for file in files %}
@@ -27,6 +28,7 @@
         </div>
 
         <div class="form-group">
+            <span title="Select this checkbox if you want to conduct a single analysis for a given mass at a given retention time.">?</span>
             <label for="peak_analysis_cb">Do peak analysis:</label>
             <input type="checkbox" id="peak_analysis_cb" name="peak_analysis_cb" value="true">
             <label for="retention_time" style="margin-left: 20px;">Retention time:</label>
@@ -38,6 +40,7 @@
         <br>
 
         <div class="form-group">
+            <span title="Select this checkbox if you want to predict the formula of a certain mass signal in a given spectrum.&#10;Input the mass and the index of the spectrum of the signal that you want to analyze.">?</span>
             <label for="mass_analysis_cb">Do mass analysis:</label>
             <input type="checkbox" id="mass_analysis_cb" name="mass_analysis_cb" value="true">
             <label for="spec_index" style="margin-left: 20px;">Spectrum index:</label>
@@ -49,12 +52,13 @@
         <br>
 
         <div class="form-group">
+            <span title="Select this checkbox if you want to conduct multiple analyses at once.&#10;Give a .txt file with each row containing 'm/z \t rt'.&#10;rt is given in seconds.&#10;Each row of the file is then subsequently analyzed for the selected MS file.">?</span>
             <label title="Give a .txt file with each row containing 'm/z \t rt'" for="peak_analysis_list_cb">Give peak list file (*.txt):</label>
             <input type="checkbox" id="peak_analysis_list_cb" name="peak_analysis_list_cb" value="true">
             <input type="file" name="peak_list_file" id="peak_list_file">
         </div>
 
-        <input type="submit" value="Upload to server" style="font-size: 20px; padding: 10px 20px;">
+        <input type="submit" value="Start analysis" style="font-size: 20px; padding: 10px 20px;">
     </form>
 </body>
 </html></select>
