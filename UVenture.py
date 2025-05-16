@@ -95,7 +95,7 @@ class MS_File:
             self.all_modes = []
             self.tic = []
             self.available_modes = []
-
+            
             for index in range(len(self.rawdata)):
                 self.tic.append(self.rawdata[index]["total ion current"])
                 self.all_filters.append(self.rawdata[index]["scanList"]["scan"][0]["filter string"])
@@ -108,6 +108,11 @@ class MS_File:
                     self.available_modes.append("AIF")
             self.all_modes = self.available_modes
             self.available_modes = list(set(self.available_modes))
+            starttime = datetime.datetime.now()
+            self.rt_range = [min(self.rt_list), max(self.rt_list)]
+            self.mz_range = [ float( self.all_filters[0].split("[")[1].split("-")[0] ), float(self.all_filters[0].split("[")[1].split("-")[1].replace("]", "")) ]
+            print(self.rt_range)
+            print(self.mz_range)
 
     def save_txt(self, filename):
         with open(filename, "w") as f:
@@ -144,7 +149,8 @@ class MS_File:
 
 
 class Spec:
-    def __init__(self, ms_file, index, **kwargs):
+    def __init__(self, ms_file, index, debug_output=False, **kwargs):
+        self.debug_output = debug_output
         self.original_index = index
         self.ms_file = ms_file
 
@@ -198,12 +204,13 @@ class Spec:
         self.make_spec_log_entry("INFO:\t" + "Requested MS/MS mass: " + str(self.kwargs["spec_requested_ms_ms_mass"]))
         self.make_spec_log_entry("INFO:\t" + "Saving plot?: " + str(self.kwargs["spec_save_matplotlib_plot"]))
 
-        print("Getting mass spec...")
-        self.summarized_mass_intensity_dict = MS_functions.summarize_mass_intensity_dict(self.get_mass_spec(self.index), deviation=self.kwargs["mass_deviation"], debug_output=True)
-        print("Got summarized mass spec")
+        if self.debug_output:
+            print("Getting mass spec...")
+        self.summarized_mass_intensity_dict = MS_functions.summarize_mass_intensity_dict(self.get_mass_spec(self.index), deviation=self.kwargs["mass_deviation"], debug_output=False)
         self.summarized_masses = list(self.summarized_mass_intensity_dict.keys())
         self.summarized_intensities = list(self.summarized_mass_intensity_dict.values())
-        print("Summarized mass intensity dict shortened to: " + str(len(self.summarized_mass_intensity_dict)) + " elements.")
+        if self.debug_output:
+            print("Summarized mass intensity dict shortened to: " + str(len(self.summarized_mass_intensity_dict)) + " elements.")
         self.make_spec_log_entry("Summarized_mass_intensity_dict: ")
         log_summarized_mass_intensity_dict = {float(dictkey) if isinstance(dictkey, np.float64) else dictkey : float(dictvalue) if isinstance(dictvalue, np.float32) else dictvalue for dictkey, dictvalue in self.summarized_mass_intensity_dict.items()}
         self.make_spec_log_entry(str(log_summarized_mass_intensity_dict))
@@ -276,7 +283,8 @@ class Spec:
         metadata.add_text("msms_masses", str(self.ms_ms_masses))
         target_image = PIL.Image.open(image_filepath)
         target_image.save(image_filepath, pnginfo=metadata)
-        print("Saved image")
+        if self.debug_output:
+            print("Saved image")
         self.make_spec_log_entry("INFO:\t" + "Finished saving mass spectrum plot...")
 
     def search_for_required_spec_close_to_rt(self, index, requested_mode="whatever", requested_ms_ms_mass=""):
@@ -284,7 +292,8 @@ class Spec:
         change_index_value = 1
         change_index_direction = "+"
         start_index = copy.deepcopy(index)
-        print("Starting ms spectrum search at index: " + str(curr_index))
+        if self.debug_output:
+            print("Starting ms spectrum search at index: " + str(curr_index))
 
         while True and not requested_mode == "whatever":
             filter = self.ms_file.rawdata[curr_index]["scanList"]["scan"][0]["filter string"]
@@ -297,9 +306,10 @@ class Spec:
                     ms_ms_masses.append(round(float(element.split("@")[0]), 1))
 
             if (curr_index >= len(self.ms_file.rawdata)-3) or (curr_index <= 3):
-                print("NOTHING WAS FOUND IN THE WHOLE CHROMATOGRAM! Index at boundaries. Returning...")
-                print("Returning the start index: " + str(start_index))
-                print("Mode of the start index: " + str(MS_functions.get_mode_of_spec(self.ms_file.rawdata[start_index]["scanList"]["scan"][0]["filter string"])))
+                if self.debug_output:
+                    print("NOTHING WAS FOUND IN THE WHOLE CHROMATOGRAM! Index at boundaries. Returning...")
+                    print("Returning the start index: " + str(start_index))
+                    print("Mode of the start index: " + str(MS_functions.get_mode_of_spec(self.ms_file.rawdata[start_index]["scanList"]["scan"][0]["filter string"])))
                 return start_index
             
             if not filter_mode == requested_mode:
@@ -314,11 +324,13 @@ class Spec:
                 continue
 
             elif filter_mode == requested_mode and requested_ms_ms_mass == "":
-                print("Found requested spectrum")
+                if self.debug_output:
+                    print("Found requested spectrum")
                 break
 
             elif (filter_mode == requested_mode) and (round(requested_ms_ms_mass, 1) in ms_ms_masses):
-                print("FOUND MSMSSPECTRUM")
+                if self.debug_output:
+                    print("FOUND MSMSSPECTRUM")
                 break
 
             else:
@@ -337,8 +349,9 @@ class Spec:
         intensities = list(self.ms_file.rawdata[index]["intensity array"])
         filter = self.ms_file.rawdata[index]["scanList"]["scan"][0]["filter string"]
         filter_mode = MS_functions.get_mode_of_spec(filter)
-        print("Filter: " + filter)
-        print("MS level of the mass spectrum: " + str(self.ms_file.rawdata[index]["ms level"]))
+        if self.debug_output:
+            print("Filter: " + filter)
+            print("MS level of the mass spectrum: " + str(self.ms_file.rawdata[index]["ms level"]))
         ms_ms_masses = []
         filter_parsed = filter.split(" ")
         filter_parsed = [x for x in filter_parsed if "hcd" in x]
@@ -1148,17 +1161,26 @@ class OneAnalysis:
         self.make_oa_log_entry("INFO:\t" + "Intensity of the ion in best molecular ion spec and best frag spec: " + str(int_in_mi) + " / " + str(int_in_frag))
         if type_of_ion == "fragment_ion" and self.kwargs["oa_stop_if_oa_given_ion_is_a_fragment"] == True:
             self.make_oa_log_entry("INFO:\t" + "Stopping the prediction for the molecular ion, as the given mass is most likely to be a fragment.")
+            if self.kwargs["oa_zip_folder_when_finished"] == True:
+                shutil.make_archive(self.ms_file.parentfolder + "/" + str(self.mass) + "_" + str(self.rt), "zip", self.kwargs["one_analysis_folder"])
+                shutil.rmtree(self.kwargs["one_analysis_folder"])
             return
 
 
         self.molecular_ion_prediction = self.get_molecular_ion_prediction(self.best_molecular_ion_spec)
         if self.molecular_ion_prediction.peak_found == False and self.kwargs["oa_molecular_ion_only_calc_prediction_if_molecular_ion_peak_is_found"] == True:
             self.make_oa_log_entry("INFO:\t" + "No molecular ion prediction peak found. Stopping prediction...")
+            if self.kwargs["oa_zip_folder_when_finished"] == True:
+                shutil.make_archive(self.ms_file.parentfolder + "/" + str(self.mass) + "_" + str(self.rt), "zip", self.kwargs["one_analysis_folder"])
+                shutil.rmtree(self.kwargs["one_analysis_folder"])
             return
 
         if len(list(self.summarized_molecular_ion_formula_score_dict.keys())) == 0:
             print("No molecular ion prediction could be found! Returning....")
             self.make_oa_log_entry("INFO:\t" + "No molecular ion prediction could be found! Returning.....")
+            if self.kwargs["oa_zip_folder_when_finished"] == True:
+                shutil.make_archive(self.ms_file.parentfolder + "/" + str(self.mass) + "_" + str(self.rt), "zip", self.kwargs["one_analysis_folder"])
+                shutil.rmtree(self.kwargs["one_analysis_folder"])
             return
 
         self.make_oa_log_entry("INFO:\t" + "Finished prediction of molecular ion...")
