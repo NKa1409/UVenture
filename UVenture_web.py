@@ -19,6 +19,7 @@ import werkzeug
 import UVenture
 import MS_functions
 import multiprocessing
+import UVenture_peakdetection
 
 
 def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
@@ -30,6 +31,16 @@ def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
         print(e)
         print(traceback.format_exc())
         return
+
+def start_pd_process(ms_filepath, parentfolder, mass_deviation, peaklist_filename, mzrt_filename):
+    ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder)
+    UVenture_peakdetection.get_all_possible_peaks_2(ms_file, mass_range=1, 
+                                        threshold_area=150000, threshold_intensity=50000, 
+                                        rt_bins=400, mass_deviation_isotopo=mass_deviation/5, height_deviation_isotopo=0.5,
+                                        min_peak_width=4, max_peak_width=40,
+                                        peaklist_filename=peaklist_filename, mzrt_filename=mzrt_filename)
+    return
+
 
 
 class Webpage:
@@ -347,7 +358,7 @@ class Webpage:
                     calc_new_file = True
                 if calc_new_file:
                     ms_filepath = self.mzml_folder + file_select
-                    self.curr_ms_file = UVenture.MS_File(ms_filepath, parentfolder=self.results_folder + str(".".join(file_select.split(".")[:-1])) + "/")
+                    self.curr_ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=self.results_folder + str(".".join(file_select.split(".")[:-1])) + "/")
                 print("MS file loaded")
                 if calc_new_file == False and (xic_mass in list(self.curr_xic_encoded_plot.keys())) and (mass_deviation == self.curr_mass_deviation):
                     print("XIC plot already calculated")
@@ -423,6 +434,42 @@ class Webpage:
 
             return flask.render_template("help_page.html", contents_list=contents_list)
         
+        @self.app.route("/detect_peaks", methods=["GET", "POST"])
+        def detect_peaks():
+            # Take the mzml file that the user has uploaded and perform a complete peak detection on the file. Store the results in a folder on the webserver_save/results/mzml file folder.
+            # The user can select the mzml file from a dropdown menu.
+            available_mzml_files = os.listdir(self.mzml_folder)
+            if flask.request.method == "POST":
+                settings_dict = self.get_settings_dict()
+                mass_deviation = settings_dict["mass_deviation"]
+
+                form_data = flask.request.form.to_dict()
+                if not "fileselection" in form_data:
+                    return flask.render_template_string("No file selected!")
+                start_analysis_once_detected = form_data.get("start_analysis_once_detected", "false")
+
+                print(form_data)
+                if "fileselection" in form_data:
+                    ms_filepath = self.mzml_folder + form_data["fileselection"]
+                    parentfolder = self.parentfolder + "results/" + ".".join(form_data["fileselection"].split(".")[:-1]) + "/"
+                    #UVenture_OA_starttime_20231001:12:00:00_MZ_
+                    proc_name = "UVenture_peak_detection_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_MZ__FILE_" + str(form_data["fileselection"])
+                    print("Starting process: " + proc_name)
+                    peaklist_filename = parentfolder + "peaklist.txt"
+                    taskstorage = ""
+                    if start_analysis_once_detected == "true" or start_analysis_once_detected == True:
+                        #ms_filepath, parentfolder, peaklist_filename, mzrt_filename
+                        taskstorage = self.taskstorage_filepath
+                        p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, mass_deviation, peaklist_filename, taskstorage), name=proc_name)
+                    else:
+                        p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, mass_deviation, peaklist_filename, taskstorage), name=proc_name)
+                    p.start()
+                    self.running_processes.append(p)
+                    return flask.redirect("/show_currently_running")
+
+            return flask.render_template("detect_peaks.html", files=available_mzml_files)
+
+
         @self.app.route("/upload_mzml_file", methods=["POST", "GET"])
         def upload_mzml_file():
             """If the user has uploaded a file, save it to the parent folder"""
@@ -628,7 +675,6 @@ class Webpage:
             print("Task added to task storage file")
             return flask.jsonify({"status": "success", "message": "Task added to task storage file"})
         
-
         @self.app.route("/api/get_status", methods=["GET"])
         def get_status():
             try:
@@ -822,6 +868,7 @@ class Webpage:
             if not p.is_alive():
                 print("Process " + str(p.name) + " is not alive. Removing it from the list.")
                 try:
+                    # process name looks like: UVenture_OA_starttime_20231001:120000_MZ_150.0_RT_1.0_FILE_test.mzML
                     self.process_times[p.name] = [datetime.datetime.strptime(p.name.split("starttime_")[1].split("_MZ_")[0], "%Y%m%d:%H%M%S"), datetime.datetime.now(), p.name.split("_FILE_")[1]]
                     self.update_best_time_approx_per_analysis()
                     print("Process " + str(p.name) + " finished. Time taken: " + str(self.process_times[p.name][1] - self.process_times[p.name][0]))

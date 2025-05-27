@@ -10,6 +10,7 @@
 
     <form action="/resultsdownload" method="post" enctype="multipart/form-data">
         <div class="form-group" style="margin-bottom: 20px;">
+            <span title="Select the MS file for that you want to download the results.&#10;Every prediction & analysis that has been conducted for this specific MS file will be downloaded then.&#10;Results will be obtained as a .zip file."><span style="background-color:#263238;color:#fafafa;">&nbsp;?&nbsp;</span>&nbsp;&nbsp;&nbsp;&nbsp;</span>
             <label for="fileSelect">Select a file:</label>
             <select id="fileSelect" name="fileselection">
                 {% for file in files %}
@@ -17,6 +18,17 @@
                 {% endfor %}
             </select>
         </div>
+        <div class="form-group" style="margin-bottom: 20px;">
+            <span title="Check this checkbox if you want to download the summary file only.&#10;This setting significantly reduces the size of the download by omitting individual results."><span style="background-color:#263238;color:#fafafa;">&nbsp;?&nbsp;</span>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+            <label for="download_summary_only">Download summary only: </label>
+            <input type="checkbox" name="download_summary_only" id="download_summary_only" value="True">
+        </div>
+        <div class="form-group" style="margin-bottom: 20px;">
+            <span title="Choose this setting if you want to delete all predictions made for the selected MS file.&#10;This frees space on the server but results that have not been previously downloaded are lost."><span style="background-color:#263238;color:#fafafa;">&nbsp;?&nbsp;</span>&nbsp;&nbsp;&nbsp;&nbsp;</span>
+            <label for="delete_once_downloaded">Delete after download: </label>
+            <input type="checkbox" name="delete_once_downloaded" id="delete_once_downloaded" value="True">
+        </div>
+        <br>
         <button id="download" name="download">Download results</button>
     </form>
 

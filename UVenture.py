@@ -2,8 +2,10 @@ import ast
 import copy
 import datetime
 import math
+import re
 import traceback
 import PIL
+from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 import matplotlib
 matplotlib.use('Agg')
@@ -61,6 +63,9 @@ def run_one_analysis(ms_filepath, mz, retention_time, settings_filepath, parentf
 
 class MS_File:
     def __init__(self, filename=None, **kwargs):
+        self.debug_output = True
+        self.do_bckg_subtraction = False
+        self.get_2d_spec = True
         if filename == None:
             print("No filename given. Read a txt file with the spectrum to fill this object with MS data.")
             print("MS_File.read_txt(filename)")
@@ -81,24 +86,53 @@ class MS_File:
                 parentfolder = str(".".join(filename.split(".")[:-1]) + "/")
             default_kwargs = {"parentfolder_msfile": parentfolder,
                               "logfile_filepath": parentfolder + "MSfile_logfile.txt"}
-            kwargs = {**default_kwargs, **kwargs}
-            os.makedirs(kwargs["parentfolder_msfile"], exist_ok=True)
+            self.kwargs = {**default_kwargs, **kwargs}
+            os.makedirs(self.kwargs["parentfolder_msfile"], exist_ok=True)
 
-            self.parentfolder = kwargs["parentfolder_msfile"]
-
+            self.parentfolder = self.kwargs["parentfolder_msfile"]
             self.filename = filename
             self.file = mzml.read(self.filename)
             self.rawdata = list(self.file)
+            for entry in self.rawdata[-1]:
+                print(entry)
+                if "m/z array" in entry or "intensity array" in entry:
+                    continue
+                print(self.rawdata[-1][entry])
+            self.rename_rawdata_keys()
+            print("Renamed rawdata keys: " + str(list(self.rawdata[-1].keys())))
+            for entry in self.rawdata[-1]:
+                print(entry)
+                if "m/z array" in entry or "intensity array" in entry:
+                    continue
+                print(self.rawdata[-1][entry])
+            self.rename_scanlist_keys()
+            print("Renamed scanList keys: " + str(list(self.rawdata[-1]["scanList"].keys())))
+            for entry in self.rawdata[-1]:
+                print(entry)
+                if "m/z array" in entry or "intensity array" in entry:
+                    continue
+                print(self.rawdata[-1][entry])
+
             self.method_duration = self.rawdata[-1]["scanList"]["scan"][0]["scan time"]
             self.rt_list = [element["scanList"]["scan"][0]["scan time"] for element in self.rawdata]
+            self.save_ms_file_log_entry("INFO:\t" + "Reading MS file: " + str(self.filename))
+            self.save_ms_file_log_entry("INFO:\t" + "Method duration: " + str(self.method_duration))
+            self.save_ms_file_log_entry("INFO:\t" + "Number of spectra: " + str(len(self.rawdata)))
             self.all_filters = []
             self.all_modes = []
             self.tic = []
             self.available_modes = []
-            
             for index in range(len(self.rawdata)):
                 self.tic.append(self.rawdata[index]["total ion current"])
-                self.all_filters.append(self.rawdata[index]["scanList"]["scan"][0]["filter string"])
+            try:
+                filter_string = self.self.rawdata[-1]["scanList"]["scan"][0]["filter string"]
+            except Exception as e:
+                print("No filter string found in the last scan. Trying to construct it...")
+                for index in range(len(self.rawdata)):
+                    self.rawdata[index]["scanList"]["scan"][0]["filter string"] = self.construct_filter_string(index)
+            for index in range(len(self.rawdata)):
+                self.all_filters.append(self.rawdata[index]["scanList"]["scan"][0]["filter string"]) 
+            self.save_ms_file_log_entry("INFO:\t" + "Summed TIC: " + str(sum(self.tic)))
             for filter_string in self.all_filters:
                 if " d " in filter_string and "@hcd" in filter_string:
                     self.available_modes.append("MS/MS")
@@ -108,17 +142,418 @@ class MS_File:
                     self.available_modes.append("AIF")
             self.all_modes = self.available_modes
             self.available_modes = list(set(self.available_modes))
-            starttime = datetime.datetime.now()
             self.rt_range = [min(self.rt_list), max(self.rt_list)]
             self.mz_range = [ float( self.all_filters[0].split("[")[1].split("-")[0] ), float(self.all_filters[0].split("[")[1].split("-")[1].replace("]", "")) ]
-            print(self.rt_range)
-            print(self.mz_range)
+            self.save_ms_file_log_entry("INFO:\t" + "RT range: " + str(self.rt_range))
+            self.save_ms_file_log_entry("INFO:\t" + "m/z range: " + str(self.mz_range))
+            self.save_ms_file_log_entry("INFO:\t" + "Available modes: " + str(self.available_modes))
+
+            self.aif_background_spectrum = None
+            self.ms1_background_spectrum = None
+            self.get_background_spectra(background_range=(3, 10), bckg_m_dev=0.0001, blank_multiplicator=3)
+            self.save_ms_file_log_entry("INFO:\t" + "Summed MS1 background signals: " + str(sum(list(self.ms1_background_spectrum.values()))))
+            self.save_ms_file_log_entry("INFO:\t" + "Summed AIF background signals: " + str(sum(list(self.aif_background_spectrum.values()))))
+            
+            if self.debug_output:
+                print("Starting to bg substract the data...")
+            starttime = datetime.datetime.now()
+            if self.get_2d_spec:
+                save_filename = self.parentfolder + "/2Dspec.tiff"
+                if not os.path.exists(save_filename):
+                    self.get_2d_spectrum(filter_mode="Full scan", save=self.parentfolder + "/2Dspec.tiff", max_dim=5000)
+                    self.save_ms_file_log_entry("INFO:\t" + "2D spectrum saved to: " + str(save_filename))
+            #mass = 138.0191 + ((i-4)*0.11)
+            #rt_list, intensities = self.get_xic_from_2d_spectrum(mass=mass, filename=self.parentfolder + "/2Dspec.tiff")
+            #print("Got XIC from 2D spectrum")
+            #self.plot_xic(rt_list, intensities, filename=self.parentfolder + str(mass) + "_XIC.png")
+            if self.do_bckg_subtraction:
+                if self.debug_output:
+                    print("Doing background subtraction...")
+                self.save_ms_file_log_entry("INFO:\t" + "Doing background subtraction...")
+                self.do_background_subtraction(background_range=(3, 10), multiplicator=3, bckg_m_dev=0.00001)
+                self.save_ms_file_log_entry("INFO:\t" + "Finished background subtraction...")
+                if self.debug_output:
+                    print("Finished background subtraction in: " + str(datetime.datetime.now() - starttime)) 
 
     def save_txt(self, filename):
         with open(filename, "w") as f:
             f.write(str(self.rawdata))
         return True
 
+    def extract_key_value_pairs(self, d, parent_key=''):
+        items = []
+        if isinstance(d, dict):
+            for k, v in d.items():
+                new_key = f"{parent_key}.{k}" if parent_key else k
+                if isinstance(v, dict):
+                    items.extend(self.extract_key_value_pairs(v, new_key))
+                elif isinstance(v, list):
+                    for i, item in enumerate(v):
+                        indexed_key = f"{new_key}[{i}]"
+                        if isinstance(item, dict):
+                            items.extend(self.extract_key_value_pairs(item, indexed_key))
+                        else:
+                            items.append((indexed_key, item))
+                else:
+                    items.append((new_key, v))
+        else:
+            items.append((parent_key, d))
+        return items
+
+    def get_nested_value(self, data, path, delete=False):
+        dict_value = None
+        try:
+            keys = re.split(r'\.(?![^\[]*\])', path)
+            for i, key in enumerate(keys):
+                list_match = re.match(r'([^\[]+)\[(\d+)\]', key)
+                if list_match:
+                    dict_key = list_match.group(1)
+                    index = int(list_match.group(2))
+                    if i == len(keys) - 1:
+                        dict_value = data[dict_key][index]
+                        if delete:
+                            del data[dict_key][index]
+                    else:
+                        data = data[dict_key][index]
+                else:
+                    if i == len(keys) - 1:
+                        dict_value = data[key]
+                        if delete:
+                            del data[key]
+                    else:
+                        data = data[key]
+        except Exception as e:
+            print(f"Error accessing path '{path}': {e}")
+            dict_value = None
+        return dict_value
+
+    def rename_rawdata_keys(self):
+        all_kv_pairs = self.extract_key_value_pairs(self.rawdata[-1])
+        example_rawdata = self.rawdata[-2]
+        rd_keys = list(example_rawdata.keys())
+        if not "m/z array" in rd_keys:
+            print("No m/z array found in the rawdata. Trying to find the appropriate key...")
+            for key in rd_keys:
+                if ( ("m/z" in key.lower()) or ("mz" in key.lower()) or ("mass" in key.lower()) ) and \
+                    ( ("array" in key.lower()) or ("list" in key.lower()) or ("values" in key.lower()) ) and \
+                        ( isinstance(self.rawdata[-2][key], tuple) or isinstance(self.rawdata[-2][key], list) or isinstance(self.rawdata[-2][key], np.ndarray) ):
+                    print("Found m/z array key: " + str(key))
+                    for index in range(len(self.rawdata)):
+                        self.rawdata[index]["m/z array"] = list(self.rawdata[index][key])
+                        del self.rawdata[index][key]
+        all_kv_pairs = self.extract_key_value_pairs(self.rawdata[-1])
+        if not "intensity array" in rd_keys:
+            print("No intensity array found in the rawdata. Trying to find the appropriate key...")
+            for key in rd_keys:
+                if ( ("intensity" in key.lower()) or ("intensities" in key.lower()) or ("int" in key.lower()) ) and \
+                      ( ("array" in key.lower()) or ("list" in key.lower()) or ("values" in key.lower()) ) and \
+                        ( isinstance(self.rawdata[-2][key], tuple) or isinstance(self.rawdata[-2][key], list) or isinstance(self.rawdata[-2][key], np.ndarray) ):
+                    print("Found intensity array key: " + str(key))
+                    for index in range(len(self.rawdata)):
+                        self.rawdata[index]["intensity array"] = list(self.rawdata[index][key])
+                        del self.rawdata[index][key]
+        all_kv_pairs = self.extract_key_value_pairs(self.rawdata[-1])
+        if not "scanList" in rd_keys:
+            print("No scanList found in the rawdata. Trying to find the appropriate key...")
+            for key in rd_keys:
+                if ( ("scan list" in key.lower()) or ("scanlist" in key.lower()) or ("list of scans" in key.lower()) or \
+                          ("scan dict" in key.lower()) or ("scandict" in key.lower()) or ("description" in key.lower()) ) and \
+                                ( isinstance(self.rawdata[-2][key], dict) ):
+                    print("Found scanList key: " + str(key))
+                    for index in range(len(self.rawdata)):
+                        self.rawdata[index]["scanList"] = self.rawdata[index][key]
+                        del self.rawdata[index][key]
+        all_kv_pairs = self.extract_key_value_pairs(self.rawdata[-1])
+        if not "total ion current" in rd_keys:
+            print("No total ion current found in the rawdata. Trying to find the appropriate key...")
+            for key, value in all_kv_pairs:
+                if ( ("total ion current" in key.lower()) or ("tic" in key.lower()) or ("total ion current signal" in key.lower()) or ("tic int" in key.lower()) or ("ticint" in key.lower()) ):
+                      example_tic = value
+                      if ( isinstance(example_tic, float) or isinstance(example_tic, int) ):
+                        print("Found total ion current key: " + str(key))
+                        for index in range(len(self.rawdata)):
+                            curr_tic_val = self.get_nested_value(self.rawdata[index], key, delete=True)
+                            self.rawdata[index]["total ion current"] = curr_tic_val
+
+    def rename_scanlist_keys(self):
+        scanlist_kv_pairs = self.extract_key_value_pairs(self.rawdata[-1]["scanList"])
+        scanlist_keys = list(self.rawdata[-1]["scanList"].keys())
+        print(scanlist_keys)
+        if not "scan" in scanlist_keys:
+            print("No scan found in the scanList. Trying to find the appropriate key...")
+            for key in scanlist_keys:
+                if ("scan" in key.lower() or "scans" in key.lower()) and \
+                    ( isinstance(self.rawdata[-1]["scanList"][key], list) or isinstance(self.rawdata[-1]["scanList"][key], tuple) ):
+                    print("Found scanList -> scan key: " + str(key))
+                    for index in range(len(self.rawdata)):
+                        self.rawdata[index]["scanList"]["scan"] = list(self.rawdata[index]["scanList"][key])
+                        del self.rawdata[index]["scanList"][key]
+        
+        scanlist_scan_keys = list(self.rawdata[-1]["scanList"]["scan"][0].keys())
+        if not "scan time" in scanlist_scan_keys:
+            print("No scan time found in the scanList -> scan. Trying to find the appropriate key...")
+            for key in scanlist_scan_keys:
+                if ("rt" in key.lower() or "time" in key.lower()) and \
+                    ( isinstance(self.rawdata[-1]["scanList"]["scan"][0][key], float) or isinstance(self.rawdata[-1]["scanList"]["scan"][0][key], int) ):
+                    print("Found scanList -> scan -> scan time key: " + str(key))
+                    for index in range(len(self.rawdata)):
+                        self.rawdata[index]["scanList"]["scan"][0]["scan time"] = self.rawdata[index]["scanList"]["scan"][0][key]
+                        del self.rawdata[index]["scanList"]["scan"][0][key]
+        if not "filter string" in scanlist_scan_keys:
+            print("No filter string found in the scanList -> scan. Trying to find the appropriate key...")
+            for key in scanlist_scan_keys:
+                if ("filter" in key.lower() or "filter string" in key.lower() or "filt" in key.lower()) and \
+                    ( isinstance(self.rawdata[-1]["scanList"]["scan"][0][key], str) ):
+                    print("Found scanList -> scan -> filter string key: " + str(key))
+                    for index in range(len(self.rawdata)):
+                        self.rawdata[index]["scanList"]["scan"][0]["filter string"] = self.rawdata[index]["scanList"]["scan"][0][key]
+                        del self.rawdata[index]["scanList"]["scan"][0][key]
+
+    def construct_filter_string(self, rawdata_index):
+        # normal filter string looks like: FTMS - p ESI Full ms [50.0000-750.0000]
+        upper_mass = max(self.rawdata[rawdata_index]["m/z array"])
+        lower_mass = min(self.rawdata[rawdata_index]["m/z array"])
+        upper_mass = round(upper_mass, 4)
+        lower_mass = round(lower_mass, 4)
+        if upper_mass < lower_mass:
+            print("Upper mass is lower than lower mass. Setting to default values.")
+            upper_mass = 50000
+            lower_mass = 0
+        if str(upper_mass).lower() == "nan" or str(upper_mass).lower() == "inf":
+            print("Upper mass is NaN or Inf. Setting upper mass to 50000 and lower mass to 0.")
+            upper_mass = 50000
+        if str(lower_mass).lower() == "nan" or str(lower_mass).lower() == "-inf":
+            print("Lower mass is NaN or -Inf. Setting lower mass to 0.")
+            lower_mass = 0
+        msn = 0
+        polarity = "NA"
+        all_data_kv_pairs = self.extract_key_value_pairs(self.rawdata[rawdata_index])
+        for key, value in all_data_kv_pairs:
+            if ("mslevel" in key.lower().replace(" ", "") or "msn" in key.lower()) and isinstance(value, int):
+                msn = value
+                break
+            elif ("mslevel" in key.lower().replace(" ", "") or "msn" in key.lower()) and isinstance(value, str):
+                try:
+                    msn = int(value)
+                    break
+                except:
+                    try:
+                        msn = float(value)
+                        break
+                    except:
+                        print("Could not get the ms level by key value pair. Trying only keys or values now...")
+            try:
+                if value.lower().replace(" ", "") == "ms1" or value.lower().replace(" ", "") == "fullscan":
+                    msn = 1
+                    break
+                elif value.lower().replace(" ", "") == "ms2" or value.lower().replace(" ", "") == "msn" or value.lower().replace(" ", "") == "aif" or value.lower().replace(" ", "").replace("/", "") == "msms":
+                    msn = 2
+                    break
+                elif value.lower().replace(" ", "") == "ms3":
+                    msn = 3
+                    break
+                elif key.lower().replace(" ", "") == "fullscan" or key.lower().replace(" ", "") == "ms1":
+                    msn = 1
+                    break
+                elif key.lower().replace(" ", "") == "ms2" or key.lower().replace(" ", "") == "msn" or key.lower().replace(" ", "") == "aif" or key.lower().replace(" ", "").replace("/", "") == "msms":
+                    msn = 2
+                    break
+                else:
+                    print("No ms level found in key value pairs. Setting ms level to 1 as default.")
+                    msn = 1
+            except Exception as e:
+                print("Error while trying to convert ms level: " + str(e))
+                print(traceback.format_exc())
+                msn = 1
+        filter_string = "FTMS - p ESI "
+        if msn == 1:
+            filter_string += "Full ms [" + str(round(lower_mass, 4)) + "-" + str(round(upper_mass, 4)) + "]"
+        elif msn == 2:
+            filter_string += "hcd [" + str(round(lower_mass, 4)) + "-" + str(round(upper_mass, 4)) + "]"
+        print(filter_string)
+        return filter_string
+                                    
+    def get_background_spectra(self, background_range=(3, 10), bckg_m_dev=0.0001, blank_multiplicator=3):
+        if "AIF" in self.available_modes and "Full scan" in self.available_modes:
+            print("AIF and MS1 spectra available. Proceeding with background calculation...")
+        else:
+            print("AIF and MS1 spectra not available. Cannot calculate background spectrum. Returning...")
+            self.save_ms_file_log_entry("ERROR:\t" + "AIF and MS1 spectra not available. Cannot calculate background spectrum. Returning...")
+            self.aif_background_spectrum = None
+            self.ms1_background_spectrum = None
+            return False
+        averaged_aif_spectrum = {}
+        number_aif_spectra = 0
+        averaged_ms1_spectrum = {}
+        number_ms1_spectra = 0
+        for index in range(background_range[0], background_range[1]):
+            if self.all_modes[index] == "AIF":
+                number_aif_spectra += 1
+                aif_masses = self.rawdata[index]["m/z array"]
+                aif_intensity = self.rawdata[index]["intensity array"]
+                curr_mass_int_dict = dict(zip(aif_masses, aif_intensity))
+                curr_mass_int_dict = MS_functions.summarize_mass_intensity_dict(curr_mass_int_dict, deviation=11, debug_output=True)
+                
+                for m, i in curr_mass_int_dict.items():
+                    for existing_mass in list(averaged_aif_spectrum.keys()):
+                        if abs(existing_mass - m) <= bckg_m_dev:
+                            averaged_aif_spectrum[existing_mass] += i
+                            break
+                    averaged_aif_spectrum[m] = i
+            elif self.all_modes[index] == "Full scan":
+                number_ms1_spectra += 1
+                ms1_masses = self.rawdata[index]["m/z array"]
+                ms1_intensity = self.rawdata[index]["intensity array"]
+                curr_mass_int_dict = dict(zip(ms1_masses, ms1_intensity))
+                curr_mass_int_dict = MS_functions.summarize_mass_intensity_dict(curr_mass_int_dict, deviation=11, debug_output=True)
+                for m, i in curr_mass_int_dict.items():
+                    for existing_mass in list(averaged_ms1_spectrum.keys()):
+                        if abs(existing_mass - m) <= bckg_m_dev:
+                            averaged_ms1_spectrum[existing_mass] += i
+                            break
+                    averaged_ms1_spectrum[m] = i
+        averaged_aif_spectrum = MS_functions.summarize_mass_intensity_dict(averaged_aif_spectrum, deviation=11, debug_output=True)
+        averaged_ms1_spectrum = MS_functions.summarize_mass_intensity_dict(averaged_ms1_spectrum, deviation=11, debug_output=True)
+        averaged_aif_spectrum = {k: ((v / number_aif_spectra)*blank_multiplicator) for k, v in averaged_aif_spectrum.items()}
+        averaged_ms1_spectrum = {k: ((v / number_ms1_spectra)*blank_multiplicator) for k, v in averaged_ms1_spectrum.items()}
+        self.aif_background_spectrum = averaged_aif_spectrum
+        self.ms1_background_spectrum = averaged_ms1_spectrum
+        return averaged_aif_spectrum, averaged_ms1_spectrum
+
+    def do_background_subtraction(self, background_range=(3,10), bckg_m_dev=0.0001):
+        if self.aif_background_spectrum is None or self.ms1_background_spectrum is None:
+            self.get_background_spectra(background_range=background_range, bckg_m_dev=bckg_m_dev)
+        
+        for index in range(len(self.rawdata)):
+            print("Doing background subtraction for index: " + str(index) + " / " + str(len(self.rawdata)))
+            curr_masses = self.rawdata[index]["m/z array"]
+            curr_intensity = self.rawdata[index]["intensity array"]
+            curr_dict = dict(zip(curr_masses, curr_intensity))
+            curr_dict = MS_functions.summarize_mass_intensity_dict(curr_dict, deviation=11, debug_output=False)
+            if self.all_modes[index] == "AIF":
+                for curr_mass, curr_int in curr_dict.items():
+                    for mass_bckg, intensity_bckg in self.aif_background_spectrum.items():
+                        if abs(mass_bckg - curr_mass) <= bckg_m_dev:
+                            curr_dict[curr_mass] -= intensity_bckg
+                curr_masses = list(curr_dict.keys())
+                curr_intensity = list(curr_dict.values())
+                self.rawdata[index]["m/z array"] = curr_masses
+                self.rawdata[index]["intensity array"] = curr_intensity
+            elif self.all_modes[index] == "Full scan":
+                for curr_mass, curr_int in curr_dict.items():
+                    for mass_bckg, intensity_bckg in self.ms1_background_spectrum.items():
+                        if abs(mass_bckg - curr_mass) <= bckg_m_dev:
+                            curr_dict[curr_mass] -= intensity_bckg
+                curr_masses = list(curr_dict.keys())
+                curr_intensity = list(curr_dict.values())
+                self.rawdata[index]["m/z array"] = curr_masses
+                self.rawdata[index]["intensity array"] = curr_intensity
+
+    def get_xic_from_2d_spectrum(self, mass, filename):
+        # Load the 2D spectrum image
+        image = PIL.Image.open(r"" + str(filename))
+        mz_range = self.mz_range_2dspec
+        rt_range = self.rt_range_2dspec
+        print("mz_range: " + str(mz_range))
+        print("rt_range: " + str(rt_range))
+        print(mass)
+
+        # Extract the values of the nth row
+        # Create a new figure
+        step_deviation = (mz_range[1] - mz_range[0]) / image.size[1]
+        best_approx = (mass - mz_range[0]) / step_deviation
+        row_index = int(best_approx)
+        print("Deviation between steps: " + str((mz_range[1] - mz_range[0]) / image.size[1]))
+        row_index = image.size[1] - row_index
+        print("row_index: " + str(row_index))
+        # Ensure the image is in grayscale mode ('L' or 'I;16')
+        if image.mode not in ['L', 'I;16']:
+            print("The image is not in grayscale mode. Converting...")
+            image = image.convert('I;16')
+        # Convert the image to a NumPy array
+        image_array = np.array(image)
+
+        # Get the pixel intensities of the specified row
+        row_values = [image_array[row_index][r] for r in range(len(image_array[row_index]))]
+        print("len row_values: " + str(len(row_values)))
+
+        rt_list = [(rt_range[0] + (i * ((rt_range[1] - rt_range[0]) / image.size[0]))) for i in range(len(row_values))]
+        return rt_list, row_values
+
+    def plot_xic(self, rt_list, intensities, filename=""):
+        fig = Figure(figsize=(10, 5))
+        # Create a subplot
+        ax = fig.add_subplot(111)
+        # Plot the row values
+        ax.plot(rt_list, intensities, color='blue')
+        ax.scatter(rt_list, intensities, color='red', s=10, marker="x")
+        # Set the title and labels
+        ax.set_xlabel("RT")
+        ax.set_ylabel("Intensity")
+        # Save the figure
+        fig.savefig(filename, dpi=DPI)
+        fig.clf()
+        fig.clear()
+
+    def get_2d_spectrum(self, filter_mode="Full scan", save="", max_dim=5000):
+        Y = [self.rawdata[i]["m/z array"] for i in range(len(self.rawdata)) if (self.all_modes[i] == filter_mode)]
+        intensity = [self.rawdata[i]["intensity array"] for i in range(len(self.rawdata)) if (self.all_modes[i] == filter_mode)]
+        # Flatten data
+        X_vals, Y_vals, I_vals = [], [], []
+        for x, (y_row, i_row) in enumerate(zip(Y, intensity)):
+            for y, i in zip(y_row, i_row):
+                X_vals.append(x)
+                Y_vals.append(y)
+                I_vals.append(i)
+        X_vals = np.array(X_vals, dtype=float)
+        Y_vals = np.array(Y_vals, dtype=float)
+        I_vals = np.array(I_vals, dtype=float)
+        # Determine data bounds
+        x_min, x_max = X_vals.min(), X_vals.max()
+        y_min, y_max = Y_vals.min(), Y_vals.max()
+        self.mz_range_2dspec = [y_min, y_max]
+        self.rt_range_2dspec = [x_min, x_max]
+
+        # Target image resolution
+        max_dim = max_dim
+        # Compute scaling factors
+        x_range = x_max - x_min
+        y_range = y_max - y_min
+        # Determine scale to fit date within 5000x5000 while preserving aspect ratio
+        if len(Y) < max_dim:
+            max_dim_x = len(Y)-1
+        else:
+            max_dim_x = max_dim
+        scalex = max(x_range / max_dim_x, 1e-9)
+        scaley = max(y_range / max_dim, 1e-9)
+        width = int(np.ceil(x_range / scalex)) + 1
+        height = int(np.ceil(y_range / scaley)) + 1
+        # Shift and scale coordinates into image space
+        X_img = ((X_vals - x_min) / scalex).astype(int)
+        Y_img = ((y_max - Y_vals) / scaley).astype(int)  # Invert Y
+
+        # Step 1: Create a 2D array (single channel) for grayscale image
+        gray_image = np.zeros((height, width), dtype=np.float32)  # or np.uint16 if preferred
+        # Sum intensities per pixel
+        #from collections import defaultdict
+        #pixel_intensity = defaultdict(float)
+        pixel_intensity = {}
+        for x, y, i in zip(X_img, Y_img, I_vals):
+            try:
+                pixel_intensity[(y, x)] += i
+            except:
+                pixel_intensity[(y, x)] = i
+        # Map intensity to colormap (viridis)
+        for (y, x), val in pixel_intensity.items():
+            gray_image[y, x] = val
+        if not save == "":
+            foldername = os.path.normpath(save)
+            foldername = os.path.dirname(foldername)
+            os.makedirs(foldername, exist_ok=True)
+            myimage = PIL.Image.fromarray(gray_image, mode='I;16')
+            myimage.save(save)
+        return True
+        
     def read_txt(self, filename):
         with open(filename, "r") as f:
             rawdata = f.read()
@@ -147,6 +582,15 @@ class MS_File:
         self.all_modes = self.available_modes
         self.available_modes = list(set(self.available_modes))
 
+    def save_ms_file_log_entry(self, log_entry):
+        #get the dirname of the logfile_filepath
+        directory_logfile = os.path.dirname(self.kwargs["logfile_filepath"])
+        #create the directory if it does not exist
+        os.makedirs(directory_logfile, exist_ok=True)
+        log_f = open(self.kwargs["logfile_filepath"], "a")
+        log_f.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\t" + log_entry + "\n")
+        log_f.close()
+        return True
 
 class Spec:
     def __init__(self, ms_file, index, debug_output=False, **kwargs):
@@ -273,16 +717,6 @@ class Spec:
         fig.savefig(image_filepath, bbox_inches='tight', dpi=DPI)
         fig.clf()
         fig.clear()
-        metadata = PIL.PngImagePlugin.PngInfo()
-        metadata.add_text("masses", str(self.summarized_masses))
-        metadata.add_text("intensities", str(self.summarized_intensities))
-        metadata.add_text("index", str(self.index))
-        metadata.add_text("orig_file_entry_for_index", str(self.ms_file.rawdata[self.index]))
-        metadata.add_text("mode", str(self.filter_mode))
-        metadata.add_text("filter", str(self.filter))
-        metadata.add_text("msms_masses", str(self.ms_ms_masses))
-        target_image = PIL.Image.open(image_filepath)
-        target_image.save(image_filepath, pnginfo=metadata)
         if self.debug_output:
             print("Saved image")
         self.make_spec_log_entry("INFO:\t" + "Finished saving mass spectrum plot...")
@@ -966,6 +1400,7 @@ class Prediction:
 
 class OneAnalysis:
     def __init__(self, ms_file, mass, rt, **kwargs):
+        self.debug_output = True
         self.mass = mass
         self.rt = rt
         self.ms_file = ms_file
@@ -1021,12 +1456,24 @@ class OneAnalysis:
         self.kwargs = {**default_kwargs, **kwargs}
         os.makedirs(self.kwargs["one_analysis_folder"], exist_ok=True)
 
-        print()
-        print("OneAnalysis kwargs: " + str(self.kwargs))
-        print()
-        print("Make good fragment prediction: " + str(self.kwargs["oa_make_good_fragment_formula_prediction"]))
+        if self.debug_output:
+            print()
+            print("OneAnalysis kwargs: " + str(self.kwargs))
+            print()
+            print("Make good fragment prediction: " + str(self.kwargs["oa_make_good_fragment_formula_prediction"]))
         self.kwargs["oa_make_good_fragment_formula_prediction"] = bool(self.kwargs["oa_make_good_fragment_formula_prediction"])
-        print("Make good fragment prediction: " + str(self.kwargs["oa_make_good_fragment_formula_prediction"]))
+
+        additional_kwargs = copy.deepcopy(self.kwargs)
+        pop_keys = ["spec_requested_filter_mode", "absolute_spec_folder", "mass_deviation", "spec_save_matplotlib_plot", "spec_save_go_plot"]
+        for key in pop_keys:
+            try:
+                additional_kwargs.pop(key)
+            except KeyError:
+                continue
+        
+        if self.debug_output:
+            print("Additional Kwargs: " + str(additional_kwargs))
+
 
         self.make_oa_log_entry("")
         self.make_oa_log_entry("=============================================================")
@@ -1054,19 +1501,6 @@ class OneAnalysis:
         
         self.make_oa_log_entry("INFO:\t" + "Extracted Ion Chromatogram (XIC) plot saved at: " + str(self.xic_plot_filepath))
 
-        print(kwargs)
-
-        additional_kwargs = copy.deepcopy(self.kwargs)
-        pop_keys = ["spec_requested_filter_mode", "absolute_spec_folder", "mass_deviation", "spec_save_matplotlib_plot", "spec_save_go_plot"]
-        for key in pop_keys:
-            try:
-                additional_kwargs.pop(key)
-            except KeyError:
-                continue
-        
-        print(additional_kwargs)
-        print()
-        print(kwargs)
 
         if "Full scan" in self.ms_file.available_modes:
             self.full_scan_spec = Spec(self.ms_file, 
@@ -2039,12 +2473,6 @@ class OneAnalysis:
         fig.savefig(save_filepath, bbox_inches='tight', dpi=DPI)
         fig.clf()
         fig.clear()
-        metadata = PIL.PngImagePlugin.PngInfo()
-        metadata.add_text("xic_retention_time", str(xic[0]))
-        metadata.add_text("xic_intensity_list", str(xic[1]))
-        metadata.add_text("xic_original_index_list", str(xic[2]))
-        target_image = PIL.Image.open(save_filepath)
-        target_image.save(save_filepath, pnginfo=metadata)
 
     def plot_summary_xic_of_mi_and_fragments(self, save_filepath):
         #e.g. [173.00860345677103, 29845.72513229523, 1214042584.515625, 'C6H5O6', 111.00881936704444, 2496.3943129810064, 21546167.083251953, 'C5H3O3', 'C1H2O3', 1.8695119725597358]

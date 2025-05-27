@@ -20,6 +20,8 @@ def read_mzml_file(mzml_filename):
 
 
 def get_xic(f, mass, mass_deviation, requested_filter_mode="Full scan"):
+    # The mass deviation is defined as the requested mass +1x the mass deviation and -1x the mass deviation.
+    # If the requested mass is 1000 and the mass deviation is 0.005, the range is 999.995 to 1000.005.
     if (not requested_filter_mode == "Full scan") and (not requested_filter_mode == "AIF") and (not requested_filter_mode == "MS/MS"):
         requested_filter_mode = "Full scan"
     rt_list = []
@@ -370,51 +372,6 @@ def compare_peak_shape_similarity(xic1, xic2, peak_rt, peakwidth=10, debug_outpu
             print("area was nan. Chaning area to: " + str(area))
 
     return area, peak1_rt, peakintensity1, peak2_rt, peakintensity2
-
-
-def do_bg_substraction(y, not_including_peak_width_multiplier=3, peakwidth=10):
-    if int(len(y)/20) <=1:
-        savgol_window = 2
-    else:
-        savgol_window = int(len(y)/20)
-    peaks, peak_properties = scipy.signal.find_peaks(scipy.signal.savgol_filter(y, savgol_window, 1))
-
-    background = copy.deepcopy(y)
-    for peak in range(len(peaks)):
-        for index in range(int(peaks[peak] - peakwidth * not_including_peak_width_multiplier),
-                           int(peaks[peak] + peakwidth * not_including_peak_width_multiplier), 1):
-
-            try:
-                m = (background[
-                         int(peaks[peak] + peakwidth * not_including_peak_width_multiplier)] -
-                     background[
-                         int(peaks[peak] - peakwidth * not_including_peak_width_multiplier)]) / (
-                            int(
-                                peaks[peak] + peakwidth * not_including_peak_width_multiplier) - int(
-                        peaks[peak] - peakwidth * not_including_peak_width_multiplier))
-            except:
-                m = 1
-            try:
-                background[index] = background[int(
-                    peaks[peak] - peakwidth * not_including_peak_width_multiplier)] + (m * (
-                        index - int(
-                    peaks[peak] - peakwidth * not_including_peak_width_multiplier)))
-            except:
-                break
-    if int(len(y)/5) <=1:
-        savgol_window = 2
-    else:
-        savgol_window = int(len(y)/5)
-    background = scipy.signal.savgol_filter(background, savgol_window, 1)
-    bg_subst_series = []
-    for entry in range(len(y)):
-        bg_subst_series.append(y[entry] - background[entry])
-    if int(len(y)/20) <=1:
-        savgol_window = 2
-    else:
-        savgol_window = int(len(y)/20)
-    bg_subst_series = scipy.signal.savgol_filter(bg_subst_series, savgol_window, 1)
-    return [bg_subst_series, background, peaks, peak_properties]
 
 
 def get_mode_of_spec(filter_string):

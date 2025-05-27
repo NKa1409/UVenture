@@ -168,6 +168,7 @@
             <img src="{{ url_for('static', filename='uventure_icon.png') }}" alt="Home">
         </a>
         <a class="{{ 'active' if request.path == '/queue_new_analysis' }}" href="/">New analysis</a>
+        <a class="{{ 'active' if request.path == '/detect_peaks' }}" href="/detect_peaks">Detect peaks</a>
         <a class="{{ 'active' if request.path == '/change_settings' }}" href="/change_settings">Change settings</a>
         <a class="{{ 'active' if request.path == '/file_browser' }}" href="/file_browser">File browser</a>
         <a class="{{ 'active' if request.path == '/resultsdownload' }}" href="/resultsdownload">Results downloader</a>

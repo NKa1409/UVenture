@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+</head>
+
+
+
+<body>
+    {% include 'navbar.html' %}
+
+
+    <h1>Detect Peaks</h1>
+    <form method="POST" action="/detect_peaks">
+        <label for="fileselection">Select an mzML file:</label>
+        <select name="fileselection" id="fileselection" required>
+            {% for file in files %}
+                <option value="{{ file }}">{{ file }}</option>
+            {% endfor %}
+        </select>
+        <br><br>
+        <label for="start_analysis_once_detected">
+            <input type="checkbox" name="start_analysis_once_detected" id="start_analysis_once_detected" value="true">
+            Start analysis immediately after peak detection
+        </label>
+        <br><br>
+        <button type="submit">Submit</button>
+    </form>
+</body>
+</html>

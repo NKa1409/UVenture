@@ -7,8 +7,13 @@
     {% include 'navbar.html' %}
     
     <h1>Currently Running Tasks</h1>
-
-    <p>Below is a list of all the tasks that are currently running on the server. The tasks are listed in the order they were started.</p>
+    <p>
+        Remaining tasks: {{ pending_analyses }}
+        <br>
+        Unique files in the queue: {{ unique_analysis_files }}
+        <br>
+        Best estimate of time remaining: {{ time_till_finished_hours }} hours ({{ finish_time }})
+    </p>
     <hr>
     <ul>
     {% set previous_task_name = "None" %}
