@@ -158,6 +158,51 @@
             border-left: 2px solid #333; 
             border-right: 2px solid #333;
         }
+        /* Dropdown Container */
+        .dropdown {
+            float: left;
+            overflow: hidden;
+        }
+        .dropdown .dropbtn {
+            border: none;
+            outline: none;
+            color: #f2f2f2;
+            padding: 0px 0px;
+            background-color: inherit;
+            margin: 0;
+            border-left: 2px solid #333; 
+            border-right: 2px solid #333;
+            text-align: center;
+            text-decoration: none;
+
+        }
+        .navbar a:hover, .dropdown:hover .dropbtn {
+            background-color: #575757;
+        }
+        /* Dropdown Content */
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            width: auto;
+            box-shadow: 0px 0px 0px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+        }
+        .dropdown-content a {
+            float: none;
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            text-align: left;
+        }
+        .dropdown-content a:hover {
+            background-color: #ddd;
+        }
+        /* Show the dropdown content on hover */
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
     </style>
 </head>
 
@@ -169,7 +214,15 @@
         </a>
         <a class="{{ 'active' if request.path == '/queue_new_analysis' }}" href="/">New analysis</a>
         <a class="{{ 'active' if request.path == '/detect_peaks' }}" href="/detect_peaks">Detect peaks</a>
-        <a class="{{ 'active' if request.path == '/change_settings' }}" href="/change_settings">Change settings</a>
+        <div class="dropdown">
+            <button class="dropbtn">
+                <a class="{{ 'active' if request.path == '/main_settings' }}" href="/main_settings">Change settings</a>
+            </button>
+            <div class="dropdown-content">
+                <a href="/main_settings">Main settings</a>
+                <a href="/change_settings">All settings</a>
+            </div>
+        </div>
         <a class="{{ 'active' if request.path == '/file_browser' }}" href="/file_browser">File browser</a>
         <a class="{{ 'active' if request.path == '/resultsdownload' }}" href="/resultsdownload">Results downloader</a>
         <a class="{{ 'active' if request.path == '/show_currently_running' }}" href="/show_currently_running">Currently running tasks</a>

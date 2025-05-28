@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+</head>
+<body>
+    {% include 'navbar.html' %}
+    <h1>Settings</h1>
+
+    <form class="form-centered" action="/main_settings" method="post" style="padding: 10px;">
+        {% for key, value in settings_dict.items() %}
+        <div class="form-group">
+            <label for="{{ key }}">{{ key }}:</label>
+            <input type="text" id="{{ key }}" name="{{ key }}" value="{{ value }}" style="width: 100px;">
+        </div>
+        {% endfor %}
+        <hr>
+        <button type="submit" name="button" value="save_button" style="font-size: 20px; padding: 10px 20px; margin: 15px;">Save</button>
+    </form>
+
+    
+</body>
+</html>
