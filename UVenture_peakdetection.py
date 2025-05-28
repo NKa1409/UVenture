@@ -88,7 +88,7 @@ def remove_duplicates_from_peak_df_2(peak_df, rt_bins=100, mass_deviation_ppm=15
     peak_df = peak_df.sort_values(by=["rt"], ascending=[True])
     return peak_df
 
-def get_all_possible_peaks_2(ms_file, mass_range=1, 
+def get_all_possible_peaks_2(ms_file, settings_dict, mass_range=1, 
                              threshold_area=40000, threshold_intensity=10000,
                              rt_bins=400, mass_deviation_isotopo=2, height_deviation_isotopo=0.5,
                              min_peak_width=4, max_peak_width=40,
@@ -179,74 +179,13 @@ def get_all_possible_peaks_2(ms_file, mass_range=1,
                                 file = os.path.normpath(ms_file.filename)
                                 file = file.split(os.sep)[-1]
                                 print(file)
-                                f.write(f"{file}\t{new_row['mass']}\t{new_row['rt']}\n")
+                                f.write(f"{file}\t{new_row['mass']}\t{new_row['rt']}\t{settings_dict}\n")
                         break
                 if not peak_found:
                     print("No peak found for mass: " + str(row["mass"]) + " RT: " + str(row["rt"]))
                     continue
         peak_df = new_peak_df.copy()
     return True
-
-
-def perform_peak_detection_of_complete_file(ms_file, mass_range=1, 
-                                            threshold_area=40000, threshold_intensity=10000, 
-                                            rt_bins=400, mass_deviation_isotopo=0.0007, height_deviation_isotopo=0.5,
-                                            peaklist_filename="", mzrt_filename=""):
-    identified_peaks = get_all_possible_peaks(ms_file, mass_range=mass_range, threshold_area=threshold_area, threshold_intensity=threshold_intensity)
-    # identified_peaks = [[mass, height, area, rt], ...]
-
-    # Convert to DataFrame and remove duplicates
-    peak_df = pd.DataFrame(identified_peaks, columns=["mass", "rt", "height", "area"])
-    # Remove duplicates
-    peak_df = remove_duplicates_from_peak_df(peak_df, rt_bins=rt_bins, mass_deviation_isotopo=mass_deviation_isotopo)
-    
-
-    # Remove isotopo signals
-    peak_df = remove_isotopo_signals(peak_df, mass_deviation_isotopo=mass_deviation_isotopo, height_deviation_isotopo=height_deviation_isotopo)
-    
-
-    keep_rows = []
-    for index, row in peak_df.iterrows():
-        print("Mass: " + str(row["mass"]) + " RT: " + str(row["rt"]) + " Height: " + str(row["height"]))
-        xic = MS_functions.get_xic(ms_file.rawdata, mass=row["mass"], mass_deviation=mass_deviation_isotopo, requested_filter_mode="Full scan")
-        times = np.array(xic[0])
-        intensities = np.array(xic[1])
-        true_indices_of_entries = np.array(xic[2])
-        peaks, properties, smoothed_intensity = peakdetection_funcs.get_peaks_with_smooth_and_bgsubst(times, intensities, min_width_seconds=2, max_width_seconds=30)
-            
-        #Check if a peak exists at row["rt"]
-        if len(peaks) == 0:
-            print("No peak found for mass: " + str(row["mass"]) + " RT: " + str(row["rt"]))
-            continue
-        else:
-            peak_found = False
-            for peak in range(len(peaks)):
-                left = int(properties["left_ips"][peak])
-                right = int(properties["right_ips"][peak])
-                if times[left] <= row["rt"] <= times[right]:
-                    # A peak was found at the specified RT
-                    # Peak will be added to the peaklist
-                    print("Peak found for mass: " + str(row["mass"]) + " RT: " + str(row["rt"]))
-                    new_row = copy.deepcopy(row)
-                    new_row["area"] = np.trapz(smoothed_intensity[left:right], dx=(times[1] - times[0]))
-                    keep_rows.append(new_row)
-                    peak_found = True
-                    if not peaklist_filename == "":
-                        # Save the peak to the peaklist file
-                        with open(peaklist_filename, "a") as f:
-                            f.write(f"{new_row['mass']}\t{new_row['rt']}\t{new_row['area']}\t{new_row["height"]}\t{times[left]}\t{times[right]}\n")
-                    if not mzrt_filename == "":
-                        # Save the peak to the mzrt file to be processed directly
-                        with open(mzrt_filename, "a") as f:
-                            f.write(f"{new_row['mass']}\t{new_row['rt']}\n")
-                    break
-            if not peak_found:
-                print("No peak found for mass: " + str(row["mass"]) + " RT: " + str(row["rt"]))
-                continue
-    print("Keep rows: " + str(keep_rows))
-    keep_rows = pd.DataFrame(keep_rows)
-    print(keep_rows)
-
 
 
 if __name__ == "__main__":

@@ -22,44 +22,6 @@ import numpy as np
 DPI = 300
 
 
-def run_one_analysis(ms_filepath, mz, retention_time, settings_filepath, parentfolder_msfile):
-    print("starting one analysis UVenture")
-    settings_dict = {}
-    with open(settings_filepath, "r") as f:
-        file_contents_raw = f.read()
-        lines = file_contents_raw.split("\n")
-        for line in lines:
-            line = line.strip()
-            if not "=" in line:
-                continue
-            if line[0] == "#":
-                continue
-            key, value = line.split("=")
-            try:
-                value = float(value)
-            except:
-                try:
-                    value = int(value)
-                except:
-                    try:
-                        value = ast.literal_eval(value)
-                    except:
-                        value = str(value)
-            settings_dict[key] = value
-    print(settings_dict)
-    retention_time = float(retention_time)
-    mz = float(mz)
-    try:
-        ms_file = MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile)
-        myanalysis = OneAnalysis(ms_file, mz, retention_time, **settings_dict)
-        return
-    except Exception as e:
-        print(e)
-        print(traceback.format_exc())
-        return
-
-
-
 
 class MS_File:
     def __init__(self, filename=None, **kwargs):
@@ -85,7 +47,8 @@ class MS_File:
             else:
                 parentfolder = str(".".join(filename.split(".")[:-1]) + "/")
             default_kwargs = {"parentfolder_msfile": parentfolder,
-                              "logfile_filepath": parentfolder + "MSfile_logfile.txt"}
+                              "logfile_filepath": parentfolder + "MSfile_logfile.txt",
+                              "msfile_raw_file_retention_time_unit": "sec"}
             self.kwargs = {**default_kwargs, **kwargs}
             os.makedirs(self.kwargs["parentfolder_msfile"], exist_ok=True)
 
@@ -93,6 +56,7 @@ class MS_File:
             self.filename = filename
             self.file = mzml.read(self.filename)
             self.rawdata = list(self.file)
+
             for entry in self.rawdata[-1]:
                 print(entry)
                 if "m/z array" in entry or "intensity array" in entry:
@@ -115,6 +79,12 @@ class MS_File:
 
             self.method_duration = self.rawdata[-1]["scanList"]["scan"][0]["scan time"]
             self.rt_list = [element["scanList"]["scan"][0]["scan time"] for element in self.rawdata]
+            if self.kwargs["msfile_raw_file_retention_time_unit"] == "min" or self.kwargs["msfile_raw_file_retention_time_unit"] == "minutes":
+                print("Converting retention time from minutes to seconds...")
+                for i in range(len(self.rawdata)):
+                    self.rawdata[i]["scanList"]["scan"][0]["scan time"] = self.rawdata[i]["scanList"]["scan"][0]["scan time"] * 60
+                self.rt_list = [rt * 60 for rt in self.rt_list]
+            
             self.save_ms_file_log_entry("INFO:\t" + "Reading MS file: " + str(self.filename))
             self.save_ms_file_log_entry("INFO:\t" + "Method duration: " + str(self.method_duration))
             self.save_ms_file_log_entry("INFO:\t" + "Number of spectra: " + str(len(self.rawdata)))
@@ -125,7 +95,7 @@ class MS_File:
             for index in range(len(self.rawdata)):
                 self.tic.append(self.rawdata[index]["total ion current"])
             try:
-                filter_string = self.self.rawdata[-1]["scanList"]["scan"][0]["filter string"]
+                filter_string = self.rawdata[-1]["scanList"]["scan"][0]["filter string"]
             except Exception as e:
                 print("No filter string found in the last scan. Trying to construct it...")
                 for index in range(len(self.rawdata)):
@@ -293,7 +263,7 @@ class MS_File:
         if not "scan time" in scanlist_scan_keys:
             print("No scan time found in the scanList -> scan. Trying to find the appropriate key...")
             for key in scanlist_scan_keys:
-                if ("rt" in key.lower() or "time" in key.lower()) and \
+                if ("rt" in key.lower() or "scanstart" in key.lower().replace(" ", "") or "scantime" in key.lower().replace(" ", "")) and \
                     ( isinstance(self.rawdata[-1]["scanList"]["scan"][0][key], float) or isinstance(self.rawdata[-1]["scanList"]["scan"][0][key], int) ):
                     print("Found scanList -> scan -> scan time key: " + str(key))
                     for index in range(len(self.rawdata)):
@@ -328,34 +298,36 @@ class MS_File:
         msn = 0
         polarity = "NA"
         all_data_kv_pairs = self.extract_key_value_pairs(self.rawdata[rawdata_index])
-        for key, value in all_data_kv_pairs:
+        for key, val in all_data_kv_pairs:
             if ("mslevel" in key.lower().replace(" ", "") or "msn" in key.lower()) and isinstance(value, int):
-                msn = value
+                msn = val
                 break
             elif ("mslevel" in key.lower().replace(" ", "") or "msn" in key.lower()) and isinstance(value, str):
                 try:
-                    msn = int(value)
+                    msn = int(val)
                     break
                 except:
                     try:
-                        msn = float(value)
+                        msn = float(val)
                         break
                     except:
                         print("Could not get the ms level by key value pair. Trying only keys or values now...")
             try:
-                if value.lower().replace(" ", "") == "ms1" or value.lower().replace(" ", "") == "fullscan":
+                value = str(val).lower().replace(" ", "")
+                key = str(key).lower().replace(" ", "")
+                if value == "ms1" or value == "fullscan":
                     msn = 1
                     break
-                elif value.lower().replace(" ", "") == "ms2" or value.lower().replace(" ", "") == "msn" or value.lower().replace(" ", "") == "aif" or value.lower().replace(" ", "").replace("/", "") == "msms":
+                elif value == "ms2" or value == "msn" or value == "aif" or value.replace("/", "") == "msms":
                     msn = 2
                     break
-                elif value.lower().replace(" ", "") == "ms3":
+                elif value == "ms3":
                     msn = 3
                     break
-                elif key.lower().replace(" ", "") == "fullscan" or key.lower().replace(" ", "") == "ms1":
+                elif key == "fullscan" or key == "ms1":
                     msn = 1
                     break
-                elif key.lower().replace(" ", "") == "ms2" or key.lower().replace(" ", "") == "msn" or key.lower().replace(" ", "") == "aif" or key.lower().replace(" ", "").replace("/", "") == "msms":
+                elif key == "ms2" or key == "msn" or key == "aif" or key.replace("/", "") == "msms":
                     msn = 2
                     break
                 else:
@@ -591,6 +563,8 @@ class MS_File:
         log_f.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\t" + log_entry + "\n")
         log_f.close()
         return True
+
+
 
 class Spec:
     def __init__(self, ms_file, index, debug_output=False, **kwargs):
@@ -1386,11 +1360,12 @@ class Prediction:
         identified_peak_times = [entry[0] for entry in self.identified_peaks_for_mass]
         plot_heights = [max(intensities)/4 for i in range(len(identified_peak_times))]
         ax.scatter(identified_peak_times, plot_heights, color="green", label="identified peak", s=20, alpha=0.5)
-        ax.bar(self.spec.rt, max(intensities), color="red", label="observed time", alpha=0.5, width=10)
+        width_observed_time = (max(self.ms_file.rt_list) / len(self.ms_file.rt_list)) * 20
+        ax.bar(self.spec.rt, max(intensities), color="red", label="observed time", alpha=0.5, width=width_observed_time)
         ax.plot(times, intensities, color="blue", label="XIC")
         ax.set_xlabel("retention time / s")
         ax.set_ylabel("intensity / a.u.")
-        ax.set_title("Extracted Ion Chromatogram (XIC) for mass: " + str(round(self.mass, 4)) + " at RT: " + str(round(self.rt, 2)) + " s. Filtermode: " + str(self.spec.filter_mode) , wrap=True)
+        ax.set_title("Extracted Ion Chromatogram (XIC) for mass: " + str(round(self.mass, 4)) + " at RT: " + str(round(self.rt, 2)) + ". Filtermode: " + str(self.spec.filter_mode) , wrap=True)
         ax.legend()
         fig.savefig(xic_plot_filepath, bbox_inches='tight', dpi=DPI)
         fig.clf()
@@ -1404,6 +1379,8 @@ class OneAnalysis:
         self.mass = mass
         self.rt = rt
         self.ms_file = ms_file
+        self.unit_of_rt = "sec"  # default unit of retention time
+
         self.peak_index = self.ms_file.rt_list.index(min(self.ms_file.rt_list, key=lambda x: abs(self.rt - x)))
 
         default_kwargs = {"one_analysis_folder":str(self.ms_file.parentfolder + "/" + str(self.mass) + "_" + str(self.rt) + "/"),
@@ -1952,15 +1929,13 @@ class OneAnalysis:
 
         for i, ax in enumerate(frag_axs):
             curr_xic = MS_functions.get_xic(self.ms_file.rawdata, frag_masses[i], round(((self.kwargs["mass_deviation"]*self.mass) / 1000000), 4), requested_filter_mode=self.best_frag_spec.filter_mode)
-            ax.bar(self.ms_file.rt_list[peak_index], max(curr_xic[1]), color="red", label="observed time", alpha=0.5, width=10)
+            observed_window_width = (max(self.ms_file.rt_list) / len(self.ms_file.rt_list)) * 20
+            ax.bar(self.ms_file.rt_list[peak_index], max(curr_xic[1]), color="red", label="observed time", alpha=0.5, width=observed_window_width)
             ax.plot(curr_xic[0], curr_xic[1], color="blue", label="XIC " + str(round(frag_masses[i], 4)))
             ax.set_xlabel("retention time / s")
             ax.set_ylabel("intensity / a.u.")
             ax.set_title("Extracted Ion Chromatogram for fragment: " + str(round(frag_masses[i], 4)) + " u at RT: " + str(round(self.rt, 2)) + " s with mode: " + str(self.best_frag_spec.filter_mode), wrap=True)
             ax.legend()
-
-
-
 
         matplotlib.rcParams.update({'figure.autolayout': True})
         fig.savefig(save_filepath, bbox_inches='tight', dpi=DPI)
@@ -2278,7 +2253,7 @@ class OneAnalysis:
             self.make_oa_log_entry("INFO:\t" + "Finished searching for other spectra...")
         print("Starting prediction of fragment ions...")
 
-        self.possible_fragment_masses = [m for m in self.best_frag_spec.summarized_masses if m < self.mass-0.35 and self.best_frag_spec.summarized_intensities[self.best_frag_spec.summarized_masses.index(m)] > (self.intensity_of_molecular_ion * self.kwargs["oa_include_frag_intensity_noise_multiplier"])]
+        self.possible_fragment_masses = [m for m in self.best_frag_spec.summarized_masses if m < self.mass-0.1 and self.best_frag_spec.summarized_intensities[self.best_frag_spec.summarized_masses.index(m)] > (self.intensity_of_molecular_ion * self.kwargs["oa_include_frag_intensity_noise_multiplier"])]
         print(self.possible_fragment_masses)
         self.possible_fragment_masses = sorted(self.possible_fragment_masses, key=lambda m: self.best_frag_spec.summarized_intensities[self.best_frag_spec.summarized_masses.index(m)], reverse=True)
         print(self.possible_fragment_masses)
@@ -2316,7 +2291,7 @@ class OneAnalysis:
                         print("Frag mass cannot be a fragment. Intensity ratio does not match: " + str(ratio_in_spec))
                         #continue
 
-                    area_between_curves, peak1_rt, peakintensity1, peak2_rt, peakintensity2 = MS_functions.compare_peak_shape_similarity(xic1=self.xic, xic2=fragment_xic, peak_rt=self.rt, debug_output=True)
+                    area_between_curves, peak1_rt, peakintensity1, peak2_rt, peakintensity2 = MS_functions.compare_peak_shape_similarity(xic1=self.xic, xic2=fragment_xic, peak_rt=self.rt, debug_output=True, peakwidth=10)
                     if area_between_curves < 0:
                         print("Error in calculating area between the two curves.")
                         print("Peakintensity1: " + str(peakintensity1))
@@ -2518,75 +2493,7 @@ class OneAnalysis:
 
             
 if __name__ == "__main__":
-    settings_dict_filepath = "static/settings.txt"
-    settings_dict = {}
-    with open(settings_dict_filepath, "r") as f:
-        file_contents_raw = f.read()
-        lines = file_contents_raw.split("\n")
-        for line in lines:
-            line = line.strip()
-            if not "=" in line:
-                continue
-            if line[0] == "#":
-                continue
-            key, value = line.split("=")
-            try:
-                value = float(value)
-            except:
-                try:
-                    value = int(value)
-                except:
-                    try:
-                        value = ast.literal_eval(value)
-                    except:
-                        value = str(value)
-            settings_dict[key] = value  
-    for key in settings_dict:
-        print(key + ": " + str(settings_dict[key]))
-
-    settings_dict["pred_formula_cache_folder_path"] = "C://Users//Admin//Desktop//UVenture//Formula_Predictions//"
-
-    mzml_filename = "C://Users//Admin//Desktop//UVenture//UVenture//webserver_save//mzml_files//Cal2.mzML"
-
-    ms_file = MS_File(mzml_filename)
-
-    xic1 = MS_functions.get_xic(ms_file.rawdata, 138.0191, 0.001, requested_filter_mode="Full scan")
-    xic2 = MS_functions.get_xic(ms_file.rawdata, 108.0207, 0.001, requested_filter_mode="AIF")
-    #peak1_rt, peakintensity1, peak2_rt, peakintensity2 = OneAnalysis.isolate_and_prepare_peak(xic1=xic1, xic2=xic2, peak_rt=259)
-
-    settings_dict.pop("spec_requested_filter_mode")
-
-    myspec = Spec(ms_file, 345, spec_requested_filter_mode="AIF", **settings_dict)
-    input()
-
-    #find_peaks = PeakFinding(ms_file)
-    #myspec = Spec(ms_file, 400, requested_filter_mode="Full scan", save_plot=True, unique_spec_folder="test/")
-
-    #print(myspec.index)
-
-    #print(myspec.filter)
-    #print(myspec.filter_mode)
-    #print(myspec.ms_ms_masses)
-    #print(myspec.spec_rawdata)
-    #print(myspec.ms_level)
-
-    #print("=====================================================================================================")
-    #print("=====================================================================================================")
-
-    
-    #myprediction = Prediction(ms_file, 117.0554, myspec, save_plot_of_isotopologues=True, charge_of_measured_mass=-1, formula_cache_folder_path="C://Users//Admin//Desktop//UVenture//Formula_Predictions//Formula_Predictions//")
-
-    myanalysis = OneAnalysis(ms_file, 117.0554, ms_file.rt_list[79], **settings_dict)
-
-    print(myanalysis.molecular_ion_prediction.best_formula_prediction)
-    print(myanalysis.molecular_ion_prediction.score_of_best_formula)
-    print(myanalysis.molecular_ion_prediction.intensity_of_ion)
-
-
-    #print(myprediction.mass_possible_formulas)
-    #print(myprediction.formulas_score_dict)
-    #print(myprediction.mass)
-    #print(myprediction.intensity_of_ion)
+    print("This is the UVenture module. It is not meant to be run directly.")
 
 
     

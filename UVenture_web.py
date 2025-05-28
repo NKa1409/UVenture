@@ -24,7 +24,7 @@ import UVenture_peakdetection
 
 def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
     try:
-        ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile)
+        ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile, **settings_dict)
         myanalysis = UVenture.OneAnalysis(ms_file, mz, rt, **settings_dict)
         return
     except Exception as e:
@@ -32,11 +32,11 @@ def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
         print(traceback.format_exc())
         return
 
-def start_pd_process(ms_filepath, parentfolder, mass_deviation, peaklist_filename, mzrt_filename):
-    ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder)
-    UVenture_peakdetection.get_all_possible_peaks_2(ms_file, mass_range=1, 
+def start_pd_process(ms_filepath, parentfolder, peaklist_filename, mzrt_filename, settings_dict):
+    ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder, **settings_dict)
+    UVenture_peakdetection.get_all_possible_peaks_2(ms_file, settings_dict, mass_range=1, 
                                         threshold_area=150000, threshold_intensity=50000, 
-                                        rt_bins=400, mass_deviation_isotopo=mass_deviation/5, height_deviation_isotopo=0.5,
+                                        rt_bins=400, mass_deviation_isotopo=settings_dict["mass_deviation"]/5, height_deviation_isotopo=0.5,
                                         min_peak_width=4, max_peak_width=40,
                                         peaklist_filename=peaklist_filename, mzrt_filename=mzrt_filename)
     return
@@ -129,7 +129,7 @@ class Webpage:
                         return flask.render_template_string("No retention time given! Cannot analyze peak without retention time. \nPlease enter a retention time.")
                     try:
                         with open(self.taskstorage_filepath, "a") as f:
-                            f.write(form_data["fileselection"] + "\t" + str(form_data["mz_peak_analysis"]) + "\t" + str(form_data["retention_time"]) + "\n")
+                            f.write(form_data["fileselection"] + "\t" + str(form_data["mz_peak_analysis"]) + "\t" + str(form_data["retention_time"]) + "\t" + str(settings_dict) + "\n")
                         print("Task added to task storage file")
                     except Exception as e:
                         print(e)
@@ -174,37 +174,46 @@ class Webpage:
                             f.write(form_data["fileselection"])
                             f.write("\t")
                             f.write(l)
+                            f.write("\t")
+                            f.write(str(settings_dict))
                             f.write("\n")
                 
                 print("Analysis started")
                 return flask.redirect("/show_currently_running")
             return flask.render_template("queue_new_analysis.html", files=self.available_files)
 
+
+        @self.app.route("/main_settings", methods=["GET", "POST"])
+        def main_settings():
+            main_settings = ["mass_deviation", 
+                             "charge_of_measured_mass", 
+                             "msfile_raw_file_retention_time_unit", 
+                             "pred_atoms_to_keep_in_prediction", 
+                             "oa_fragments_do_peak_computation_if_area_higher_than", 
+                             "oa_fragments_absolute_max_number_of_fragment_masses", 
+                             "pred_minimum_assumed_noise"]
+            settings_dict = self.get_settings_dict()
+            main_settings_dict = {k:v for k, v in settings_dict.items() if k in main_settings}
+
+            if flask.request.method == "POST":
+                form_data = flask.request.form.to_dict()
+                print(form_data)
+                if flask.request.form.get("button") == "save_button":
+                    new_main_settings_dict = {}
+                    for key in main_settings:
+                        new_main_settings_dict[key] = form_data.get(key, "")
+                    print(new_main_settings_dict)
+                    write_settings_dict = {**settings_dict, **new_main_settings_dict}
+                    with open(self.settings_file_filepath, "w") as f:
+                        for key, value in write_settings_dict.items():
+                            f.write(key + "=" + str(value) + "\n")
+                    print("New settings saved")
+                    return flask.redirect("/main_settings")
+            return flask.render_template("main_settings.html", settings_dict=main_settings_dict)
+
         @self.app.route("/change_settings", methods=["GET", "POST"])
         def change_settings():
-            settings_dict = {}
-            file_contents_raw = ""
-            with open(self.settings_file_filepath, "r") as f:
-                file_contents_raw = f.read()
-                lines = file_contents_raw.split("\n")
-                for line in lines:
-                    line = line.strip()
-                    if not "=" in line:
-                        continue
-                    if line[0] == "#":
-                        continue
-                    key, value = line.split("=")
-                    try:
-                        value = float(value)
-                    except:
-                        try:
-                            value = int(value)
-                        except:
-                            try:
-                                value = ast.literal_eval(value)
-                            except:
-                                value = str(value)
-                    settings_dict[key] = value
+            settings_dict = self.get_settings_dict()
             
             if flask.request.method == "POST":
                 if flask.request.form.get("button") == "save_button":
@@ -221,7 +230,7 @@ class Webpage:
                     shutil.copyfile(self.settings_default_file_filepath, self.settings_file_filepath)
                 return flask.redirect("/change_settings")
                 
-            return flask.render_template("change_settings.html", settings_dict=settings_dict, file_contents_raw=file_contents_raw)
+            return flask.render_template("change_settings.html", settings_dict=settings_dict)
 
         @self.app.route("/resultsdownload", methods=["GET", "POST"])
         def resultsdownload():
@@ -460,9 +469,9 @@ class Webpage:
                     if start_analysis_once_detected == "true" or start_analysis_once_detected == True:
                         #ms_filepath, parentfolder, peaklist_filename, mzrt_filename
                         taskstorage = self.taskstorage_filepath
-                        p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, mass_deviation, peaklist_filename, taskstorage), name=proc_name)
+                        p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, peaklist_filename, taskstorage, settings_dict), name=proc_name)
                     else:
-                        p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, mass_deviation, peaklist_filename, taskstorage), name=proc_name)
+                        p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, peaklist_filename, taskstorage, settings_dict), name=proc_name)
                     p.start()
                     self.running_processes.append(p)
                     return flask.redirect("/show_currently_running")
@@ -667,11 +676,12 @@ class Webpage:
         def queue_analysis():
             mz = flask.request.args.get("mz", type=float)
             rt = flask.request.args.get("rt", type=float)
+            settings_dict = self.get_settings_dict()
             filename = flask.request.args.get("filename", type=str)
             if mz is None or rt is None or filename is None:
                 return flask.jsonify({"status": "error", "message": "Missing parameters"})
             with open(self.taskstorage_filepath, "a") as f:
-                f.write(filename + "\t" + str(mz) + "\t" + str(rt) + "\n")
+                f.write(filename + "\t" + str(mz) + "\t" + str(rt) + "\t" + str(settings_dict) + "\n")
             print("Task added to task storage file")
             return flask.jsonify({"status": "success", "message": "Task added to task storage file"})
         
@@ -836,6 +846,7 @@ class Webpage:
                 rt = lines[0].split("\t")[2]
                 mz = float(mz)
                 rt = float(rt)
+                settings_dict = ast.literal_eval(lines[0].split("\t")[3])
                 print("New task loaded: file: " + str(ms_filepath) + " mz: " + str(mz) + " rt: " + str(rt))
                 self.start_one_oa(ms_filepath,
                                     mz,
