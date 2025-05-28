@@ -1,1 +1,3 @@
-mass_deviation   esUWFds!&$!=====asfeDVW   What is the expected mass deviation of the instrument.\nCan either be calculated with the mass resolving power, or might be known from experience.\nE.g. Resolution 140000 -> Mass deviation 11
+Q: How can I upload new .mzML files?A: Go to /upload_mzml_file and choose the appropriate file. Optionally add metadata that describes the file.
+Q: How can I start an analysis?
+A: Go to the homepage or /queue_new_analysis and choose the .mzML file for which you want to conduct the analysis. If the file is not uploaded to the server, upload it first. Then choose your desired type of analysis (if you choose to analyze multiple peaks, provide a peak list (mz \t rt)). Then check the corresponding checkbox and click Start.

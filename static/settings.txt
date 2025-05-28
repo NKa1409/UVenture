@@ -1,6 +1,7 @@
 mass_deviation=12.0
 charge_of_measured_mass=-1.0
 pred_formula_cache_folder_path=.//static//Formula_Predictions//
+msfile_raw_file_retention_time_unit=min
 spec_requested_filter_mode=Full scan
 spec_requested_ms_ms_mass=
 spec_save_matplotlib_plot=True
