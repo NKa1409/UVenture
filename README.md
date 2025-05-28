@@ -75,13 +75,14 @@ To run the program:
 Future updates are planned to include:
 
 - [ ] Add file converter to .mzML format.
+- [ ] Check RAM usage and prevent from using over 90% of the RAM
 - [x] Improve batch processing capabilities. Allow to schedule multiple tasks/analyses.
 - [x] Bug fix: File browser
 - [x] Add estimation for total runtime
-- [ ] Add API endpoints
+- [x] Add API endpoints
   - [x] Delete pending tasks
   - [x] View pending tasks
-  - [ ] Add new task
+  - [x] Add new task
 - [ ] Automatic peak detection.
   - [ ] Smoothing / Background subtraction of XIC
   - [ ] Detection of peaks (RT, FWHM, exact mass, mass deviation)  
