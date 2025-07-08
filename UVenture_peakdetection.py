@@ -126,9 +126,12 @@ def get_all_possible_peaks_2(ms_file, settings_dict, mass_range=1,
         # Add the peak areas to the DataFrame
         if len(peak_areas) > 0:
             new_peak_df = pd.DataFrame(peak_areas, columns=["mass", "rt", "height", "area"])
-            peak_df = pd.concat([peak_df, new_peak_df], ignore_index=True)
+            if len(peak_df) >= 1:
+                peak_df = pd.concat([peak_df, new_peak_df], ignore_index=True)
+            elif len(peak_df) == 0:
+                peak_df = new_peak_df
 
-        if len(peak_df) <=2:
+        if len(peak_df) <= 2:
             continue
 
         # Remove duplicates

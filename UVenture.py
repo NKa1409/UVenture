@@ -2254,6 +2254,7 @@ class OneAnalysis:
         print("Starting prediction of fragment ions...")
 
         self.possible_fragment_masses = [m for m in self.best_frag_spec.summarized_masses if m < self.mass-0.1 and self.best_frag_spec.summarized_intensities[self.best_frag_spec.summarized_masses.index(m)] > (self.intensity_of_molecular_ion * self.kwargs["oa_include_frag_intensity_noise_multiplier"])]
+        self.possible_fragment_masses = [float(m) for m in self.possible_fragment_masses if isinstance(m, np.float64)]
         print(self.possible_fragment_masses)
         self.possible_fragment_masses = sorted(self.possible_fragment_masses, key=lambda m: self.best_frag_spec.summarized_intensities[self.best_frag_spec.summarized_masses.index(m)], reverse=True)
         print(self.possible_fragment_masses)

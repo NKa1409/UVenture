@@ -24,7 +24,9 @@ import UVenture_peakdetection
 
 def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
     try:
+        print("Starting analysis for m/z: " + str(mz) + ", rt: " + str(rt) + ", ms_filepath: " + ms_filepath)
         ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile, **settings_dict)
+        print("MS file loaded")
         myanalysis = UVenture.OneAnalysis(ms_file, mz, rt, **settings_dict)
         return
     except Exception as e:
@@ -42,12 +44,21 @@ def start_pd_process(ms_filepath, parentfolder, peaklist_filename, mzrt_filename
     return
 
 
+def resource_path(relative_path):
+    """ Get the absolute path to a resource, works for dev and PyInstaller .exe """
+    try:
+        # PyInstaller creates a temp folder and stores the path in _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
 
 class Webpage:
     def __init__(self) -> None:
         self.version = "1.0.1"
         self.python_version = "Python " + str(sys.version_info.major) + "." + str(sys.version_info.minor) + "." + str(sys.version_info.micro)
-        self.flask_version = "Flask " + str(flask.__version__)
         self.path_of_this_file = os.path.abspath(__file__)
         self.file_modification_time = os.path.getmtime(self.path_of_this_file)
         with open(self.path_of_this_file, "rb") as f:
@@ -62,11 +73,14 @@ class Webpage:
         if self.num_cores_to_use < 1:
             self.num_cores_to_use = 1
 
-        self.parentfolder = "webserver_save/"
+        self.parentfolder = resource_path("webserver_save/")
+        print("Parent folder: " + self.parentfolder)
         os.makedirs(self.parentfolder, exist_ok=True)
-        self.mzml_folder = self.parentfolder + "mzml_files/"
+        self.mzml_folder = resource_path(self.parentfolder + "mzml_files/")
+        print("mzML folder: " + self.mzml_folder)
         os.makedirs(self.mzml_folder, exist_ok=True)
-        self.results_folder = self.parentfolder + "results/"
+        self.results_folder = resource_path(self.parentfolder + "results/")
+        print("Results folder: " + self.results_folder)
         os.makedirs(self.results_folder, exist_ok=True)
         self.app = flask.Flask(__name__)
         self.server = None
@@ -77,10 +91,10 @@ class Webpage:
         self.curr_spec_encoded_plot = {}
         self.curr_mass_deviation = 0
         os.makedirs("static", exist_ok=True)
-        self.settings_file_filepath = "static/settings.txt"
-        self.settings_default_file_filepath = "static/settings_default.txt"
-        self.help_page_contents_filepath = "static/help_page_contents.txt"
-        self.taskstorage_filepath = "static/taskstorage.txt"
+        self.settings_file_filepath = resource_path("static/settings.txt")
+        self.settings_default_file_filepath = resource_path("static/settings_default.txt")
+        self.help_page_contents_filepath = resource_path("static/help_page_contents.txt")
+        self.taskstorage_filepath = resource_path("static/taskstorage.txt")
         #Clear the task storage file
         with open(self.taskstorage_filepath, "w") as f:
             f.write("")
@@ -448,6 +462,7 @@ class Webpage:
             # Take the mzml file that the user has uploaded and perform a complete peak detection on the file. Store the results in a folder on the webserver_save/results/mzml file folder.
             # The user can select the mzml file from a dropdown menu.
             available_mzml_files = os.listdir(self.mzml_folder)
+            available_mzml_files = [f for f in available_mzml_files if f.endswith(".mzML")]
             if flask.request.method == "POST":
                 settings_dict = self.get_settings_dict()
                 mass_deviation = settings_dict["mass_deviation"]
@@ -506,15 +521,16 @@ class Webpage:
                     uploader_info["path"] = flask.request.path
                     uploader_info["mime_type"] = flask.request.mimetype
                 
+                    # Check if the file is a mzML file
+                    if not filename.endswith(".mzML"):
+                        return flask.render_template_string("File must be in mzML format!")
+
                     with open(self.mzml_folder + "file_metadata.txt", "a") as f:
                         f.write(str(datetime.datetime.now().strftime("%D/%m/%Y, %H:%M:%S")) + "\t")
                         f.write(str(filename) + "\t")
                         f.write(str(form_data) + "\t")
                         f.write(str(uploader_info) + "\n")
                         
-                    # check if the file ends with .mzML
-                    if not filename.endswith(".mzML"):
-                        return flask.render_template_string("File must be in mzML format!")
                     #check if parentfolder exists. If not, create it
                     os.makedirs(self.mzml_folder, exist_ok=True)
                     #check if a file with the same name already exists
@@ -647,7 +663,19 @@ class Webpage:
             for p in self.running_processes:
                 try:
                     print("Killing process: " + str(p))
-                    os.kill(p.pid, signal.SIGKILL)
+                    try:
+                        os.kill(p.pid, signal.SIGKILL)
+                    except:
+                        try:
+                            os.kill(p.pid, signal.SIGILL)
+                        except:
+                            try:
+                                os.kill(p.pid, signal.SIGINT)
+                            except:
+                                try:
+                                    os.kill(p.pid, signal.SIGQUIT)
+                                except:
+                                    os.kill(p.pid, signal.SIGTERM)
                 except Exception as e:
                     print(e)
                     print(traceback.format_exc())
@@ -726,7 +754,6 @@ class Webpage:
                 "disk_path": self.parentfolder,
                 "version": str(self.version),
                 "python_version": str(self.python_version),
-                "flask_version": str(self.flask_version),
                 "server_uptime": str(round(server_uptime.days, 2)) + " days",
                 "script_runtime": str(round((datetime.datetime.now() - self.start_time).days, 2)) + " days",
                 "available_cores": str(self.num_cores_to_use),
@@ -746,14 +773,6 @@ class Webpage:
                 "pending_analyses": pending_analyses,
             }
             return flask.jsonify(status)
-
-    def __del__(self):
-        # Stop the Flask application when the object is deleted
-        if self.server is not None:
-            self.server.shutdown()
-        if self.thread is not None:
-            self.thread.join()
-        print("Webpage object deleted and server stopped")
 
     def get_settings_dict(self):
         settings_dict = {}
@@ -788,8 +807,7 @@ class Webpage:
                     last_check_time = self.check_and_load_new_task()
                     # Check if the running_processes list is still up to date
                     self.update_running_processes()
-                    while (datetime.datetime.now() - last_check_time).seconds < 0.5:
-                        time.sleep(0.1)
+                    time.sleep(0.1)
                 except Exception as e:
                     print(e)
                     print(traceback.format_exc())
@@ -853,11 +871,13 @@ class Webpage:
                                     rt,
                                     settings_dict,
                                     parentfolder_msfile)
+                print("Started new process for task: " + str(ms_filepath) + " mz: " + str(mz) + " rt: " + str(rt))
             except Exception as e:
                 print(e)
                 print(traceback.format_exc())
 
             # Remove the first line from the file
+            print("Removing first line from task storage file")
             lines = lines[1:]
             with open(self.taskstorage_filepath, "w") as f:
                 for line in lines:
@@ -909,9 +929,13 @@ class Webpage:
         mz = float(mz)
         rt = float(rt)
         thread_name = ("UVenture_OA_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_MZ_" + str(mz) + "_RT_" + str(rt) + "_FILE_" + str(ms_filepath.split("/")[-1]))
+        print("Starting new process: " + thread_name)
         proc = multiprocessing.Process(target=caller_func, args=[ms_filepath, mz, rt, settings_dict, parentfolder_msfile], name=thread_name)
+        print("Process created: " + str(proc))
         proc.start()
+        print("Process started: " + str(proc))
         self.running_processes.append(proc)
+        print("Process added to running processes list")
         self.update_running_processes()
         
 
@@ -920,6 +944,7 @@ class Webpage:
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     webapp = Webpage()
     #webapp.app.run(host="0.0.0.0", debug=False, use_reloader=False, port=5000)
     webapp.app.run(debug=False, use_reloader=False, port=5000)

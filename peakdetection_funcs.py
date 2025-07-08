@@ -56,14 +56,12 @@ def baseline_als(y, lam=1e6, p=0.01, niter=10, window_min_vals=4):
     return baseline
 
 
-def get_window_size_by_frequency(intensityvals, timevals, min_width=2, max_width=45):
+def get_window_size_by_frequency(intensityvals, timevals, min_width=3, max_width=45):
     if min_width < 0:
-        print("min_width must be greater than 0!")
-        print("Setting to default value of 3!")
+        print("min_width must be greater than 0!  Setting to default value of 3!")
         min_width = 3
     if max_width < min_width:
-        print("max_width must be greater than min_width!")
-        print("Setting to default value of 30!")
+        print("max_width must be greater than min_width!  Setting to default value of 45!")
         max_width = 45
     # Estimate a window size based on the frequency of noise oscillations in multiple windows across the whole series
     window_size = 0
@@ -108,6 +106,9 @@ def get_window_size_by_frequency(intensityvals, timevals, min_width=2, max_width
 
 
 def do_smoothing_without_effecting_peaks(y, window_size=5):
+    if window_size < 3:
+        print("window_size must be greater than 3!  Setting to default value of 5!")
+        window_size = 5
     s_intensityvals = scipy.signal.savgol_filter(y, window_length=window_size, polyorder=2, mode="nearest")
     peaks, _ = scipy.signal.find_peaks(s_intensityvals,
                                        prominence=np.std(s_intensityvals)*3, width=(5, 30))
