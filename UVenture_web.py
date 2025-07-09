@@ -49,10 +49,10 @@ def resource_path(relative_path):
     try:
         # PyInstaller creates a temp folder and stores the path in _MEIPASS
         base_path = sys._MEIPASS
+        return os.path.join(base_path, relative_path)
     except AttributeError:
         base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
+        return os.path.join("./", relative_path)
 
 
 class Webpage:
@@ -550,14 +550,19 @@ class Webpage:
                 available_space_left = str(round(available_space_left, 3)) + " GB"
             except:
                 available_space_left = "NA"
-            folder = "webserver_save/results/"
+            folder = resource_path("webserver_save/results/")
+            #folder = os.path.normpath(folder)
             contents = []
             subfolders = []
             for item in os.listdir(folder):
                 full_path = os.path.join(folder, item)
+                full_path = full_path.replace(folder, "")
+                full_path = "webserver_save/results/" + full_path
                 if os.path.isdir(full_path):
                     subfolders.append(full_path.replace("/", "->"))
                 else:
+                    full_path = full_path.replace("webserver_save/results/", "")
+                    full_path = "webserver_save->results->" + full_path
                     contents.append(full_path)
                 
             return flask.render_template("file_browser.html", contents=contents, subfolders=subfolders, available_space_left=available_space_left)
@@ -565,14 +570,19 @@ class Webpage:
         @self.app.route("/file_browser/delete/<folder>", methods=["GET", "POST"])
         def file_browser_delete(folder):
             folder = folder.replace("->", "/")
+            folder = resource_path(folder)
             folder = os.path.normpath(folder)
             if not str(folder).startswith(str(os.path.normpath(self.results_folder))):
                 print("Folder is not in the results folder. Redirecting to file browser.")
+                print("Folder: " + str(folder))
+                print("Results folder: " + str(self.results_folder))
                 return flask.redirect("/file_browser")
             # Get the last part of the folder path
+            folder = folder.replace(resource_path(""), "")
             upper_folder = "->".join(folder.replace("\\\\", "->").replace("\\", "->").replace("/", "->").split("->")[:-1])
             print(upper_folder)
             # Check if folder is a file or a directory
+            folder = resource_path(folder)
             if os.path.isfile(folder):
                 #Delete the file
                 os.remove(folder)
@@ -594,13 +604,23 @@ class Webpage:
             image_folder = folder.replace("->", "/") + "/"
             print(image_folder)
             folder = image_folder
+            folder = resource_path(folder)
             folder = os.path.normpath(folder)
+            print(folder)
             if not str(folder).startswith(str(os.path.normpath(self.results_folder))):
                 print("Folder is not in the results folder. Redirecting to file browser.")
+                print("Folder: " + str(folder))
+                print("Results folder: " + str(self.results_folder))
                 return flask.redirect("/file_browser")
             contents = []
             subfolders = []
+            # Get the last part of the folder path
+            folder = folder.replace(resource_path(""), "")
+            upper_folder = "->".join(folder.replace("\\\\", "->").replace("\\", "->").replace("/", "->").split("->")[:-1])
+            print(upper_folder)
             # Check if folder is a file or a directory
+            folder = resource_path(folder)
+            folder = os.path.normpath(folder)
             if os.path.isfile(folder):
                 # Serve the file directly as a download
                 filename = os.path.basename(folder)

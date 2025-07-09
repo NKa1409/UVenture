@@ -12,7 +12,7 @@
         <br>
         Unique files in the queue: {{ unique_analysis_files }}
         <br>
-        Best estimate of time remaining: {{ time_till_finished_hours }} hours ({{ finish_time }})
+        Best estimate of time remaining: {{ time_till_finished_hours|round(2) }} hours ({{ finish_time }})
     </p>
     <hr>
     <ul>
