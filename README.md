@@ -33,6 +33,8 @@ Image of the Homepage as can be seen when accessing *IP:5000*. To start a new an
 
 You can either follow the detailled manual installation instructions as shown in infos/installation_guide.md, or use the automatic installer script that is provided in `infos/startup.bat` (for Windows) or `infos/startup_linux.sh` for Linux based operating systems. In both cases, you need to install Python3 (3.12.0) manually and download & unpack this repository.
 
+---
+
 ### Automatic installation (recommended)
 
 **Step 1)** Install Python3 (3.12.0) on your system.  
@@ -41,8 +43,9 @@ You can either follow the detailled manual installation instructions as shown in
 
 **Step 3)** Execute the `startup.bat` (for Windows) or `startup_linux.sh` (for Linux) script inside the infos folder. 
 
-  To restart the program (e.g. after a reboot), just click on the same `startup.bat` or `startup_linux.sh` that was used in step 3.
+* To restart the program (e.g. after a reboot), just click on the same `startup.bat` or `startup_linux.sh` that was used in step 3.
 
+---
 
 ### Manual installation (see infos/installation_guide.md)
 
@@ -53,8 +56,9 @@ You can either follow the detailled manual installation instructions as shown in
 **Step 5)** Install the dependencies from requirements.txt.  
 **Step 6)** Start UVenture_web.py  
 
-  To restart the program (e.g. after a reboot), redo steps 3.1, 3.2, 4 and 6 from infos/installation_guide.md.
+* To restart the program (e.g. after a reboot), redo steps 3.1, 3.2, 4 and 6 from infos/installation_guide.md.
 
+---
 
 ## Usage
 
