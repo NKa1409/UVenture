@@ -8,6 +8,9 @@ This guide provides detailed instructions to set up and run a Python script from
 - Installing dependencies
 - Running the Python script
 
+
+## If the script has already run once, repeat steps 3.1, 3.2, 4 and 6 only.
+
 ---
 
 ## 1. Install Python
@@ -105,9 +108,6 @@ After you're finished and do not need the program anymore, you can deactivate th
 deactivate
 ```
 
----
-
-## To start the program again repeat steps 3.1, 3.2, 4 and 6.
 
 ## Troubleshooting
 
