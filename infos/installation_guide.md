@@ -92,7 +92,9 @@ source venv/bin/activate
 You will see the terminal prompt change to indicate the environment is active, e.g., (venv).
 
 ## 5. Install Dependencies
-Install the required requirements (in requirements.txt):
+Install the required requirements (in requirements.txt).
+
+It is normal for this procedure to take quite some time without any output to the screen. Please be patient.
 
 ```bash
 pip install -r requirements.txt
