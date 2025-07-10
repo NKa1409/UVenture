@@ -9,7 +9,7 @@ This guide provides detailed instructions to set up and run a Python script from
 - Running the Python script
 
 
-## If the script has already run once, repeat steps 3.1, 3.2, 4 and 6 only.
+ ****If the script has already run once, repeat steps 3.1, 3.2, 4 and 6 only.****
 
 ---
 
