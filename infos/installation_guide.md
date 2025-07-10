@@ -35,6 +35,7 @@ Open a terminal and run (you do not have to download the file from python.org):
 ```bash
 sudo apt update
 sudo apt install python3 python3-venv python3-pip -y
+```
 
 
 ## 2. Extract the ZIP Archive
