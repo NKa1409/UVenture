@@ -53,14 +53,64 @@ macOS/Linux: Open Terminal.
 
 ### 3.2 Navigate to the Project Folder
 Replace with the actual path to your extracted project folder:
+```bash
 cd path/to/project-folder
+```
 
 Examples:
 Windows:
 ```bash
 cd "C:\Users\YourName\Downloads\Project"
+```
 
 macOS/Linux:
 ```bash
 cd ~/Downloads/Project
+```
+
+## 3.3 Create the Virtual Environment
+```bash
+python -m venv venv
+```
+This will create a folder named venv inside your project directory.
+
+## 4. Activate the Virtual Environment
+Windows:
+```bash
+venv\Scripts\activate
+```
+macOS/Linux:
+```bash
+source venv/bin/activate
+```
+You will see the terminal prompt change to indicate the environment is active, e.g., (venv).
+
+## 5. Install Dependencies
+Install the required requirements (in requirements.txt):
+
+```bash
+pip install -r requirements.txt
+```
+
+## 6. Run the Script
+```bash
+python UVenture_web.py
+```
+If everything is set up correctly, the script should execute without errors.
+
+## 7. Deactivate the Virtual Environment (Optional)
+After you're finished and do not need the program anymore, you can deactivate the environment by running:
+```bash
+deactivate
+```
+To start the program again repeat steps 3.1, 3.2, 4 and 6.
+
+## Troubleshooting
+
+| Issue                        | Solution                                       |
+| ---------------------------- | ---------------------------------------------- |
+| `'python' is not recognized` | Use `py` instead of `python`, or fix PATH      |
+| `ModuleNotFoundError`        | Run `pip install package-name`                 |
+| Permissions errors           | Run terminal as Administrator / use `sudo`     |
+| Wrong Python version         | Check with `python --version` or use `python3` |
 
