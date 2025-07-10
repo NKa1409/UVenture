@@ -75,12 +75,12 @@ To run the program:
 ## Notes & Ideas for upcoming Versions
 Future updates are planned to include:
 
-- [ ] Add file converter to .mzML format (msconvert.exe).
+- [x] Add API endpoints
 - [x] Improve batch processing capabilities. Allow to schedule multiple tasks/analyses.
 - [x] Bug fix: File browser
 - [x] Add estimation for total runtime
 - [ ] Check RAM usage and prevent from using over 90% of the RAM
-- [x] Add API endpoints
+- [ ] Add file converter to .mzML format (msconvert.exe).
 - [ ] Automatic peak detection.
   - [x] Smoothing / Background subtraction of XIC
   - [x] Detection of peaks (RT, FWHM, exact mass, mass deviation)  
@@ -103,7 +103,7 @@ Contributions and recommendations for upcoming versions are welcome!
 
 ## Citation
 If you use this software for your research, please cite:
-> **Niklas Karbach, Thorsten Hoffmann**, github.com/NKa1409/UVenture
+> **Niklas Karbach, Thorsten Hoffmann**: github.com/NKa1409/UVenture
 
 
 ## License
