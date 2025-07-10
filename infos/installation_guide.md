@@ -15,6 +15,7 @@ This guide provides detailed instructions to set up and run a Python script from
 ### 1.1 Download Python
 
 Go to the official Python download page: https://www.python.org/downloads/
+
 Download a supported version of Python 3 (3.12)
 
 #### Windows:
