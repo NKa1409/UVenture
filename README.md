@@ -20,16 +20,19 @@ Future versions with enhanced functionality and optimizations are planned and wi
 
 | Isolated MS² spectrum of Acetylsalicylic acid as captured with a data-dependent Measurement | Reconstructed MS² spectrum of Acetylsalicylic acid as captured by a data-independent (AIF) measurement and processed with the tool |
 |:------------------:|:--------------------------:|
-| ![Raw Spectra Screenshot](images/isolatedMSMS.png) | ![Reconstructed Spectra Screenshot](images/quasi_isolatedMSMS.png) |
+| ![Raw Spectra Screenshot](infos/images/isolatedMSMS.png) | ![Reconstructed Spectra Screenshot](infos/images/quasi_isolatedMSMS.png) |
 
 
-![Raw Spectra Screenshot](images/WebsiteDescription.png)
+![Raw Spectra Screenshot](infos/images/WebsiteDescription.png)
 
 Image of the Homepage as can be seen when accessing *IP:5000*. To start a new analysis, a *.mzML file must be uploaded to the server and can then be selected in the dropdown menu. Select the desired type of analysis and click "Upload to server".
 
 ---
 
 ## Installation
+
+**For a more detailled installation and usage description see: infos/installation_guide.md**
+
 0. Make sure to have python installed on your system / on the server (tested with version: 3.12.0)
    
 2. Clone or download & unzip the repository and then go (*cd*) to the new folder:
@@ -50,12 +53,12 @@ Image of the Homepage as can be seen when accessing *IP:5000*. To start a new an
    pip install -r requirements.txt
 
 5. Copy the formula cache to the appropriate location. This can either be done with the command line or via the desktop GUI. The destination folder where the formula cache should be saved can be checked and changed in the settings.
-   
 
 ## Usage
 
 
 To run the program:
+0. Navigate to the project folder.
 1. Activate the venv.
 2. Start the *UVenture_web.py* python script.
    
@@ -64,6 +67,7 @@ To run the program:
    path\to\venv\Scripts\activate # Windows
    
    python UVenture_web.py
+   ```
 
 3. Open the browser and go to *IP:5000*. Where IP stands for the IP address of the PC/Server where the script is executed. E.g. *127.0.0.1:5000* or *192.168.178.2:5000*.
    This allows remote access to the program from PCs connected to the same local network as the server.
