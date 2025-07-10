@@ -21,6 +21,8 @@ Go to the official Python download page: <a href="https://www.python.org/downloa
 
 Download a supported version of Python 3 (3.12)
 
+### 1.2 Install Python
+
 #### Windows:
 1. Run the downloaded `.exe` file.
 2. **Check** the box that says: `Add Python 3.x to PATH`
