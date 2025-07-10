@@ -29,7 +29,7 @@ Image of the Homepage as can be seen when accessing *IP:5000*. To start a new an
 
 ---
 
-## Installation & Usage
+# Installation & Usage
 
 You can either follow the detailled manual installation instructions as shown in infos/installation_guide.md, or use the automatic installer script that is provided in `infos/startup.bat` (for Windows) or `infos/startup_linux.sh` for Linux based operating systems. In both cases, you need to install Python3 (3.12.0) manually and download & unpack this repository.
 
@@ -69,7 +69,7 @@ You can either follow the detailled manual installation instructions as shown in
 
 ---
 
-## Notes & Ideas for upcoming Versions
+# Notes & Ideas for upcoming Versions
 Future updates are planned to include:
 
 - [x] Add API endpoints
