@@ -43,12 +43,12 @@ sudo apt install python3 python3-venv python3-pip -y
 
 1) Locate and download the ZIP archive containing the project files from this repo.
 2) Right-click the ZIP file and select Extract All or use an extraction tool.
-3) Note the path of the extracted folder (e.g., C:\Users\YourName\Downloads\Project).
+3) Note the path of the extracted folder (e.g., `C:\Users\YourName\Downloads\UVenture-main`).
 
 
 ## 3. Create a Virtual Environment
 ### 3.1 Open Terminal / Command Prompt
-Windows: Press Win + R, type cmd, and press Enter.
+Windows: Press `Win + R`, type `cmd`, and press Enter.
 
 macOS/Linux: Open Terminal.
 
@@ -61,12 +61,12 @@ cd path/to/project-folder
 Examples:
 Windows:
 ```bash
-cd "C:\Users\YourName\Downloads\Project"
+cd "C:\Users\YourName\Downloads\UVenture-main"
 ```
 
 macOS/Linux:
 ```bash
-cd ~/Downloads/Project
+cd ~/Downloads/UVenture-main
 ```
 
 ## 3.3 Create the Virtual Environment
@@ -104,7 +104,10 @@ After you're finished and do not need the program anymore, you can deactivate th
 ```bash
 deactivate
 ```
-To start the program again repeat steps 3.1, 3.2, 4 and 6.
+
+---
+
+## To start the program again repeat steps 3.1, 3.2, 4 and 6.
 
 ## Troubleshooting
 
