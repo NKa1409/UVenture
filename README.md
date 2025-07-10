@@ -3,15 +3,16 @@
  **Analyze Full MS / AIF experiments and reconstruct quasi-isolated MS² spectra.**
  
 This repository contains the code for a tool developed to process high-resolution Full MS and All-Ion Fragmentation (AIF) mass spectrometry data.  
-The program allows researchers to reconstruct quasi-isolated MS² spectra from complex AIF datasets, facilitating deeper structural elucidation and compound identification.
+The program allows researchers to reconstruct quasi-isolated MS² spectra from complex AIF datasets. By nature of the data-independent acquisition (DIA) that AIF is, more information are contained in the resulting measurement file compared to more traditional data-dependent acquisition (DDA) experiments.
+In contrast to other programs, UVenture creates a local webserver that is reachable by all members of a team via a normal internet browser. The website provides a clean GUI for all interaction with the program.
 
 Future versions with enhanced functionality and optimizations are planned and will be published in this repository.
 
 ### Features
--  Easy to use (simple user interface and installation process)
--  Identification of sum formulas of precursor ions and related fragment ions.
--  Reconstruction of quasi-isolated MS² spectra from Full MS / AIF data.
+-  Easy-to-use (simple user interface on a local website)
 -  Flexible parameter settings for different instruments and experimental setups.
+-  Identification of sum formulas of precursor ions and related fragment ions.
+-  Reconstruction of quasi-isolated MS² spectra from Full MS / AIF data. 
 -  Spectra, chromatograms and logfiles for every compound.
 -  Export of a summary file for easy downstream analysis.
 
@@ -74,7 +75,7 @@ To run the program:
 ## Notes & Ideas for upcoming Versions
 Future updates are planned to include:
 
-- [ ] Add file converter to .mzML format.
+- [ ] Add file converter to .mzML format (msconvert.exe).
 - [x] Improve batch processing capabilities. Allow to schedule multiple tasks/analyses.
 - [x] Bug fix: File browser
 - [x] Add estimation for total runtime
@@ -92,6 +93,11 @@ Future updates are planned to include:
   - [ ] Calculate sum formula and fragments of every peak for the given m/z value, for every raw file. Are it just isomers or completely different molecules.
   - [ ] Compare the different fragmentation patterns and see if similar patterns can be found across the raw data files in the database. Those might then be the same molecules, although the LC method might have been different.
   - [ ] Give a bar chart for every individual identified compound to directly compare the individual raw files.
+- [ ] Create *local* user accounts to allow for settings to be saved per user
+  - [ ] Allow user specific file uploads
+  - [ ] Allocate x cores / RAM for one user
+  - [ ] Allow user specific settings
+  - [ ] Access controll for result files
 - [ ] Allow for GC/EI-HRMS data analysis with fragment annotation and precursor ion identification.
 
 ## Contributing
@@ -99,7 +105,7 @@ Contributions and recommendations for upcoming versions are welcome!
 
 ## Citation
 If you use this software for your research, please cite:
-> **Niklas Karbach, Thorsten Hoffmann**, *TITLE OF THE PUBLICATION*, *Journal Name*, Year 2025. DOI: `XXXXX`
+> **Niklas Karbach, Thorsten Hoffmann**, github.com/NKa1409/UVenture
 
 
 ## License
