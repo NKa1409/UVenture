@@ -29,50 +29,38 @@ Image of the Homepage as can be seen when accessing *IP:5000*. To start a new an
 
 ---
 
-## Installation
+## Installation & Usage
 
-**For a more detailled installation and usage description see: infos/installation_guide.md**
+You can either follow the detailled manual installation instructions as shown in infos/installation_guide.md, or use the automatic installer script that is provided in `infos/startup.bat` (for Windows) or `infos/startup_linux.sh` for Linux based operating systems. In both cases, you need to install Python3 (3.12.0) manually and download & unpack this repository.
 
-0. Make sure to have python installed on your system / on the server (tested with version: 3.12.0)
-   
-2. Clone or download & unzip the repository and then go (*cd*) to the new folder:
-   ```bash
-   cd path/of/the/new/folder # navigate to the newly downloaded folder
-   
-3. Create and activate a virtual environment
-   ```bash
-   # Create virtual environment (venv)
-   python -m venv path/to/venv
+### Automatic installation (recommended)
 
-   # Activate venv
-   source path/to/venv/bin/activate # on Linux
-   path\to\venv\Scripts\activate # on Windows
+**Step 1)** Install Python3 (3.12.0) on your system.
+**Step 2)** Download and extract this repository on your computer.
+For help with step 1 and 2 see `infos/installation_guide.md`.
+**Step 3)** Execute the `startup.bat` (for Windows) or `startup_linux.sh` (for Linux) script inside the infos folder. 
 
-4. Install the required Python packages:
-   ```bash
-   pip install -r requirements.txt
+To restart the program (e.g. after a reboot), just click on the same `startup.bat` or `startup_linux.sh` that was used in step 3.
 
-5. Copy the formula cache to the appropriate location. This can either be done with the command line or via the desktop GUI. The destination folder where the formula cache should be saved can be checked and changed in the settings.
+
+### Manual installation (see infos/installation_guide.md)
+
+**Step 1)** Install Python3 (3.12.0).
+**Step 2)** Download and extract this repository on your computer.
+**Step 3)** Create the virtual environment with the command prompt.
+**Step 4)** Activate the virtual environment.
+**Step 5)** Install the dependencies from requirements.txt.
+**Step 6)** Start UVenture_web.py
+
+To restart the program (e.g. after a reboot), redo steps 3.1, 3.2, 4 and 6 from infos/installation_guide.md.
+
 
 ## Usage
 
-
-To run the program:
-0. Navigate to the project folder.
-1. Activate the venv.
-2. Start the *UVenture_web.py* python script.
-   
-   ```bash
-   source path/to/venv/bin/activate # Linux
-   path\to\venv\Scripts\activate # Windows
-   
-   python UVenture_web.py
-   ```
-
-3. Open the browser and go to *IP:5000*. Where IP stands for the IP address of the PC/Server where the script is executed. E.g. *127.0.0.1:5000* or *192.168.178.2:5000*.
+1. Open the browser and go to *IP:5000*. Where IP stands for the IP address of the PC/Server where the script is executed. E.g. *127.0.0.1:5000* or *192.168.178.2:5000*.
    This allows remote access to the program from PCs connected to the same local network as the server.
 
-4. Remember to eventually update the provided formula cache (Formula Predictions) to support a larger m/z range. 
+2. Remember to eventually update the provided formula cache (Formula Predictions) to support a larger m/z range. 
 
 ---
 
