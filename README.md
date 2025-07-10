@@ -79,13 +79,11 @@ Future updates are planned to include:
 - [x] Improve batch processing capabilities. Allow to schedule multiple tasks/analyses.
 - [x] Bug fix: File browser
 - [x] Add estimation for total runtime
-- [ ] Add API endpoints
-  - [x] Delete pending tasks
-  - [x] View pending tasks
-  - [ ] Add new task
+- [ ] Check RAM usage and prevent from using over 90% of the RAM
+- [x] Add API endpoints
 - [ ] Automatic peak detection.
-  - [ ] Smoothing / Background subtraction of XIC
-  - [ ] Detection of peaks (RT, FWHM, exact mass, mass deviation)  
+  - [x] Smoothing / Background subtraction of XIC
+  - [x] Detection of peaks (RT, FWHM, exact mass, mass deviation)  
   - [ ] Detection of the type of ion. Either precursor ion or fragment ion.
   - [ ] Deconvoluion of overlapping peaks.
 - [ ] Create a database search tool to handle large numbers of individual raw files.
