@@ -19,7 +19,7 @@ This guide provides detailed instructions to set up and run a Python script from
 
 Go to the official Python download page: <a href="https://www.python.org/downloads/" target="_blank">https://www.python.org/downloads/</a>
 
-Download a supported version of Python 3 (3.12)
+Download a supported version of Python 3 (3.12.0)
 
 ### 1.2 Install Python
 
