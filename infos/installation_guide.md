@@ -46,8 +46,8 @@ sudo apt install python3 python3-venv python3-pip -y
 
 ## 2. Extract the ZIP Archive
 
-1) Locate and download the ZIP archive containing the project files from this repo.
-2) Right-click the ZIP file and select Extract All or use an extraction tool.
+1) Locate and download the ZIP archive containing the project files from this repo (Code (green button)->Download ZIP).
+2) Right-click the ZIP file and select `Extract All` or use an extraction tool.
 3) Note the path of the extracted folder (e.g., `C:\Users\YourName\Downloads\UVenture-main`).
 
 
@@ -115,8 +115,8 @@ deactivate
 
 | Issue                        | Solution                                       |
 | ---------------------------- | ---------------------------------------------- |
-| `'python' is not recognized` | Use `py` instead of `python`, or fix PATH      |
-| `ModuleNotFoundError`        | Run `pip install package-name`                 |
+| `'python' is not recognized` | Use `py` or `python3` instead of `python`, or fix PATH      |
+| `ModuleNotFoundError`        | Activate venv and run `pip install package-name`                 |
 | Permissions errors           | Run terminal as Administrator / use `sudo`     |
 | Wrong Python version         | Check with `python --version` or use `python3` |
 
