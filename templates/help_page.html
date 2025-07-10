@@ -8,38 +8,36 @@
     
     <h1>Help Page</h1>
 
-    <div class="table-of-contents">
-        <h2>Table of Contents</h2>
+    <div class="table-of-contents" style="margin-bottom: 20px;">
+        <h3>Table of Contents</h3>
         <ul>
-            {% for key, value in contents_dict.items() %}
-                <li><a href="#{{ key }}">{{ key }}</a></li>
+            {% for q, a in contents_list %}
+            <li><a href="#q{{ loop.index }}">{{ q }}</a></li>
             {% endfor %}
         </ul>
     </div>
 
+    <hr>
 
-    <div>
-        {% for key, value in contents_dict.items() %}
-            <div style="padding: 20px; width: 50%; border: 1px solid black; align-items: center;">
-                <p style="font-size: 20px; font-weight: bolder; padding-bottom: 20px;" id="{{ key }}">{{ key }}</p>
-                <p style="font-family: monospace;">{{ value }}</p><br>
-            </div>
-        {% endfor %}
+    {% for q, a in contents_list %}
+    <div class="faq-entry" style="width: 80%; margin-bottom: 30px;">
+        <h2 id="q{{ loop.index }}">{{ q }}</h2>
+        <p>{{ a }}</p>
     </div>
+    {% endfor %}
     
     <hr>
 
-    <h2>Submit a new Q/A pair or delete an old Question</h2>
-    <form method="POST" action="/help_page">
-        <label for="question">Question:</label><br>
-        <input type="text" id="question" name="question"><br>
-        <label for="answer">Answer:</label><br>
-        <textarea id="answer" name="answer"></textarea><br>
-        <label for="add_question">Add Question:</label>
-        <input type="checkbox" id="add_question" name="add_question"><br>
-        <label for="delete_question">Delete Question:</label>
-        <input type="checkbox" id="delete_question" name="delete_question"><br>
-        <input type="submit" value="Submit">
+    <hr>
+    <h2>Submit a New FAQ</h2>
+    <form method="post", style="margin-top: 20px;">
+        <label style="display: block; margin-top: 10px; width: 100%;" for="question">Question:</label>
+        <input style="display: block; margin-top: 10px; width: 100%;" type="text" name="question" id="question" required>
+
+        <label style="display: block; margin-top: 10px; width: 100%;" for="answer">Answer:</label>
+        <textarea style="display: block; margin-top: 10px; width: 100%;" name="answer" id="answer" rows="4" required></textarea>
+
+        <input style="width: auto; margin-top: 20px;" type="submit" value="Submit FAQ">
     </form>
 
 </body>

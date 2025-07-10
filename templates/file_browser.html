@@ -1,35 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <script>
-        function openTextFile(filePath) {
-            // Fetch the text file content
-            fetch(filePath)
-                .then(response => response.text())
-                .then(text => {
-                    // Open the content in a new window
-                    const newWindow = window.open('', '_blank');
-                    newWindow.document.write('<pre>' + text + '</pre>');
-                    newWindow.document.close(); // Close the document to complete loading
-                })
-                .catch(error => console.error('Error fetching text file:', error));
-        }
-    </script>
+    
 </head>
 <body>
     {% include 'navbar.html' %}
 
     <h1>File Browser</h1>
 
+    <p>
+        <strong>Available space left on device: {{ available_space_left }}</strong>
+        <br>
+        <strong>Total number of files in this folder: {{ (contents|length) }}; Total number of subfolders: {{(subfolders|length)}}</strong>
+        
+    </p>
+    <hr>
+
+    <p>
+        <!-- Check if the subfolders list contains at least 1 element. -->
+        {% if (subfolders|length) >= 1 %}
+            <a href="/file_browser/{{ current_folder }}/{{ subfolders[0].split('->')[:-2] | join('->') }}"><strong>&#8617;</strong></a>
+        {% elif (contents|length) >= 1 %}
+            <a href="/file_browser/{{ current_folder }}/{{ contents[0].split('->')[:-2] | join('->') }}"><strong>&#8617;</strong></a>
+        {% else %}
+            Folder is empty
+        {% endif %}
+        
+        <a href="/file_browser"><strong>&#8962;</strong></a>
+    <hr>
+
     <ul>
         {% for subfolder in subfolders %}
-        <li><a href="/file_browser/{{ current_folder }}/{{ subfolder }}">{{ subfolder }}</a></li>
+            <a href="/file_browser/{{ current_folder }}/{{ subfolder }}">&#128193; {{ subfolder.split('->')[-1] }}</a> <a href="/file_browser/delete/{{ current_folder }}/{{ subfolder }}" onclick="return confirm('You are about to delete the whole folder! Are you sure?')"><span>&#128465;</span></a>
+            <br>
         {% endfor %}
         
         <p><br><br></p>
         
         {% for item in contents %}
-                <li><a href="" onclick="openTextFile('{{ item }}')">{{ item }}</a></li>
+            {% if item.endswith('.txt') or item.endswith('.csv') %}
+                <a href="/file_browser/{{ current_folder }}/{{ item }}">&#128196; {{ item.split('->')[-1] }}</a> <a href="/file_browser/delete/{{ current_folder }}/{{ item }}" onclick="return confirm('You are about to delete the file! Are you sure?')"><span>&#128465;</span></a>
+            {% elif item.endswith('.png') or item.endswith('.jpg') or item.endswith('.jpeg') or item.endswith('.gif') %}
+                <a href="/file_browser/{{ current_folder }}/{{ item }}">&#128444; {{ item.split('->')[-1] }}</a> <a href="/file_browser/delete/{{ current_folder }}/{{ item }}" onclick="return confirm('You are about to delete the file! Are you sure?')"><span>&#128465;</span></a>
+            {% else %}
+                <a href="/file_browser/{{ current_folder }}/{{ item }}">&#128189; {{ item.split('->')[-1] }}</a> <a href="/file_browser/delete/{{ current_folder }}/{{ item }}" onclick="return confirm('You are about to depete the file! Are you sure?')"><span>&#128465;</span></a>
+            {% endif %}
+            <br>
         {% endfor %}
     </ul>
 </body>

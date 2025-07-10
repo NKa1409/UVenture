@@ -19,11 +19,14 @@ import werkzeug
 import UVenture
 import MS_functions
 import multiprocessing
+import UVenture_peakdetection
 
 
 def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
     try:
-        ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile)
+        print("Starting analysis for m/z: " + str(mz) + ", rt: " + str(rt) + ", ms_filepath: " + ms_filepath)
+        ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile, **settings_dict)
+        print("MS file loaded")
         myanalysis = UVenture.OneAnalysis(ms_file, mz, rt, **settings_dict)
         return
     except Exception as e:
@@ -31,12 +34,31 @@ def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
         print(traceback.format_exc())
         return
 
+def start_pd_process(ms_filepath, parentfolder, peaklist_filename, mzrt_filename, settings_dict):
+    ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder, **settings_dict)
+    UVenture_peakdetection.get_all_possible_peaks_2(ms_file, settings_dict, mass_range=1, 
+                                        threshold_area=150000, threshold_intensity=50000, 
+                                        rt_bins=400, mass_deviation_isotopo=settings_dict["mass_deviation"]/5, height_deviation_isotopo=0.5,
+                                        min_peak_width=4, max_peak_width=40,
+                                        peaklist_filename=peaklist_filename, mzrt_filename=mzrt_filename)
+    return
+
+
+def resource_path(relative_path):
+    """ Get the absolute path to a resource, works for dev and PyInstaller .exe """
+    try:
+        # PyInstaller creates a temp folder and stores the path in _MEIPASS
+        base_path = sys._MEIPASS
+        return os.path.join(base_path, relative_path)
+    except AttributeError:
+        base_path = os.path.abspath(".")
+        return os.path.join("./", relative_path)
+
 
 class Webpage:
     def __init__(self) -> None:
         self.version = "1.0.1"
         self.python_version = "Python " + str(sys.version_info.major) + "." + str(sys.version_info.minor) + "." + str(sys.version_info.micro)
-        self.flask_version = "Flask " + str(flask.__version__)
         self.path_of_this_file = os.path.abspath(__file__)
         self.file_modification_time = os.path.getmtime(self.path_of_this_file)
         with open(self.path_of_this_file, "rb") as f:
@@ -51,11 +73,14 @@ class Webpage:
         if self.num_cores_to_use < 1:
             self.num_cores_to_use = 1
 
-        self.parentfolder = "webserver_save/"
+        self.parentfolder = resource_path("webserver_save/")
+        print("Parent folder: " + self.parentfolder)
         os.makedirs(self.parentfolder, exist_ok=True)
-        self.mzml_folder = self.parentfolder + "mzml_files/"
+        self.mzml_folder = resource_path(self.parentfolder + "mzml_files/")
+        print("mzML folder: " + self.mzml_folder)
         os.makedirs(self.mzml_folder, exist_ok=True)
-        self.results_folder = self.parentfolder + "results/"
+        self.results_folder = resource_path(self.parentfolder + "results/")
+        print("Results folder: " + self.results_folder)
         os.makedirs(self.results_folder, exist_ok=True)
         self.app = flask.Flask(__name__)
         self.server = None
@@ -66,10 +91,10 @@ class Webpage:
         self.curr_spec_encoded_plot = {}
         self.curr_mass_deviation = 0
         os.makedirs("static", exist_ok=True)
-        self.settings_file_filepath = "static/settings.txt"
-        self.settings_default_file_filepath = "static/settings_default.txt"
-        self.help_page_contents_filepath = "static/help_page_contents.txt"
-        self.taskstorage_filepath = "static/taskstorage.txt"
+        self.settings_file_filepath = resource_path("static/settings.txt")
+        self.settings_default_file_filepath = resource_path("static/settings_default.txt")
+        self.help_page_contents_filepath = resource_path("static/help_page_contents.txt")
+        self.taskstorage_filepath = resource_path("static/taskstorage.txt")
         #Clear the task storage file
         with open(self.taskstorage_filepath, "w") as f:
             f.write("")
@@ -118,7 +143,7 @@ class Webpage:
                         return flask.render_template_string("No retention time given! Cannot analyze peak without retention time. \nPlease enter a retention time.")
                     try:
                         with open(self.taskstorage_filepath, "a") as f:
-                            f.write(form_data["fileselection"] + "\t" + str(form_data["mz_peak_analysis"]) + "\t" + str(form_data["retention_time"]) + "\n")
+                            f.write(form_data["fileselection"] + "\t" + str(form_data["mz_peak_analysis"]) + "\t" + str(form_data["retention_time"]) + "\t" + str(settings_dict) + "\n")
                         print("Task added to task storage file")
                     except Exception as e:
                         print(e)
@@ -163,37 +188,46 @@ class Webpage:
                             f.write(form_data["fileselection"])
                             f.write("\t")
                             f.write(l)
+                            f.write("\t")
+                            f.write(str(settings_dict))
                             f.write("\n")
                 
                 print("Analysis started")
                 return flask.redirect("/show_currently_running")
             return flask.render_template("queue_new_analysis.html", files=self.available_files)
 
+
+        @self.app.route("/main_settings", methods=["GET", "POST"])
+        def main_settings():
+            main_settings = ["mass_deviation", 
+                             "charge_of_measured_mass", 
+                             "msfile_raw_file_retention_time_unit", 
+                             "pred_atoms_to_keep_in_prediction", 
+                             "oa_fragments_do_peak_computation_if_area_higher_than", 
+                             "oa_fragments_absolute_max_number_of_fragment_masses", 
+                             "pred_minimum_assumed_noise"]
+            settings_dict = self.get_settings_dict()
+            main_settings_dict = {k:v for k, v in settings_dict.items() if k in main_settings}
+
+            if flask.request.method == "POST":
+                form_data = flask.request.form.to_dict()
+                print(form_data)
+                if flask.request.form.get("button") == "save_button":
+                    new_main_settings_dict = {}
+                    for key in main_settings:
+                        new_main_settings_dict[key] = form_data.get(key, "")
+                    print(new_main_settings_dict)
+                    write_settings_dict = {**settings_dict, **new_main_settings_dict}
+                    with open(self.settings_file_filepath, "w") as f:
+                        for key, value in write_settings_dict.items():
+                            f.write(key + "=" + str(value) + "\n")
+                    print("New settings saved")
+                    return flask.redirect("/main_settings")
+            return flask.render_template("main_settings.html", settings_dict=main_settings_dict)
+
         @self.app.route("/change_settings", methods=["GET", "POST"])
         def change_settings():
-            settings_dict = {}
-            file_contents_raw = ""
-            with open(self.settings_file_filepath, "r") as f:
-                file_contents_raw = f.read()
-                lines = file_contents_raw.split("\n")
-                for line in lines:
-                    line = line.strip()
-                    if not "=" in line:
-                        continue
-                    if line[0] == "#":
-                        continue
-                    key, value = line.split("=")
-                    try:
-                        value = float(value)
-                    except:
-                        try:
-                            value = int(value)
-                        except:
-                            try:
-                                value = ast.literal_eval(value)
-                            except:
-                                value = str(value)
-                    settings_dict[key] = value
+            settings_dict = self.get_settings_dict()
             
             if flask.request.method == "POST":
                 if flask.request.form.get("button") == "save_button":
@@ -210,7 +244,7 @@ class Webpage:
                     shutil.copyfile(self.settings_default_file_filepath, self.settings_file_filepath)
                 return flask.redirect("/change_settings")
                 
-            return flask.render_template("change_settings.html", settings_dict=settings_dict, file_contents_raw=file_contents_raw)
+            return flask.render_template("change_settings.html", settings_dict=settings_dict)
 
         @self.app.route("/resultsdownload", methods=["GET", "POST"])
         def resultsdownload():
@@ -347,7 +381,7 @@ class Webpage:
                     calc_new_file = True
                 if calc_new_file:
                     ms_filepath = self.mzml_folder + file_select
-                    self.curr_ms_file = UVenture.MS_File(ms_filepath, parentfolder=self.results_folder + str(".".join(file_select.split(".")[:-1])) + "/")
+                    self.curr_ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=self.results_folder + str(".".join(file_select.split(".")[:-1])) + "/")
                 print("MS file loaded")
                 if calc_new_file == False and (xic_mass in list(self.curr_xic_encoded_plot.keys())) and (mass_deviation == self.curr_mass_deviation):
                     print("XIC plot already calculated")
@@ -423,6 +457,43 @@ class Webpage:
 
             return flask.render_template("help_page.html", contents_list=contents_list)
         
+        @self.app.route("/detect_peaks", methods=["GET", "POST"])
+        def detect_peaks():
+            # Take the mzml file that the user has uploaded and perform a complete peak detection on the file. Store the results in a folder on the webserver_save/results/mzml file folder.
+            # The user can select the mzml file from a dropdown menu.
+            available_mzml_files = os.listdir(self.mzml_folder)
+            available_mzml_files = [f for f in available_mzml_files if f.endswith(".mzML")]
+            if flask.request.method == "POST":
+                settings_dict = self.get_settings_dict()
+                mass_deviation = settings_dict["mass_deviation"]
+
+                form_data = flask.request.form.to_dict()
+                if not "fileselection" in form_data:
+                    return flask.render_template_string("No file selected!")
+                start_analysis_once_detected = form_data.get("start_analysis_once_detected", "false")
+
+                print(form_data)
+                if "fileselection" in form_data:
+                    ms_filepath = self.mzml_folder + form_data["fileselection"]
+                    parentfolder = self.parentfolder + "results/" + ".".join(form_data["fileselection"].split(".")[:-1]) + "/"
+                    #UVenture_OA_starttime_20231001:12:00:00_MZ_
+                    proc_name = "UVenture_peak_detection_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_MZ__FILE_" + str(form_data["fileselection"])
+                    print("Starting process: " + proc_name)
+                    peaklist_filename = parentfolder + "peaklist.txt"
+                    taskstorage = ""
+                    if start_analysis_once_detected == "true" or start_analysis_once_detected == True:
+                        #ms_filepath, parentfolder, peaklist_filename, mzrt_filename
+                        taskstorage = self.taskstorage_filepath
+                        p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, peaklist_filename, taskstorage, settings_dict), name=proc_name)
+                    else:
+                        p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, peaklist_filename, taskstorage, settings_dict), name=proc_name)
+                    p.start()
+                    self.running_processes.append(p)
+                    return flask.redirect("/show_currently_running")
+
+            return flask.render_template("detect_peaks.html", files=available_mzml_files)
+
+
         @self.app.route("/upload_mzml_file", methods=["POST", "GET"])
         def upload_mzml_file():
             """If the user has uploaded a file, save it to the parent folder"""
@@ -450,15 +521,16 @@ class Webpage:
                     uploader_info["path"] = flask.request.path
                     uploader_info["mime_type"] = flask.request.mimetype
                 
+                    # Check if the file is a mzML file
+                    if not filename.endswith(".mzML"):
+                        return flask.render_template_string("File must be in mzML format!")
+
                     with open(self.mzml_folder + "file_metadata.txt", "a") as f:
                         f.write(str(datetime.datetime.now().strftime("%D/%m/%Y, %H:%M:%S")) + "\t")
                         f.write(str(filename) + "\t")
                         f.write(str(form_data) + "\t")
                         f.write(str(uploader_info) + "\n")
                         
-                    # check if the file ends with .mzML
-                    if not filename.endswith(".mzML"):
-                        return flask.render_template_string("File must be in mzML format!")
                     #check if parentfolder exists. If not, create it
                     os.makedirs(self.mzml_folder, exist_ok=True)
                     #check if a file with the same name already exists
@@ -478,14 +550,19 @@ class Webpage:
                 available_space_left = str(round(available_space_left, 3)) + " GB"
             except:
                 available_space_left = "NA"
-            folder = "webserver_save/results/"
+            folder = resource_path("webserver_save/results/")
+            #folder = os.path.normpath(folder)
             contents = []
             subfolders = []
             for item in os.listdir(folder):
                 full_path = os.path.join(folder, item)
+                full_path = full_path.replace(folder, "")
+                full_path = "webserver_save/results/" + full_path
                 if os.path.isdir(full_path):
                     subfolders.append(full_path.replace("/", "->"))
                 else:
+                    full_path = full_path.replace("webserver_save/results/", "")
+                    full_path = "webserver_save->results->" + full_path
                     contents.append(full_path)
                 
             return flask.render_template("file_browser.html", contents=contents, subfolders=subfolders, available_space_left=available_space_left)
@@ -493,14 +570,19 @@ class Webpage:
         @self.app.route("/file_browser/delete/<folder>", methods=["GET", "POST"])
         def file_browser_delete(folder):
             folder = folder.replace("->", "/")
+            folder = resource_path(folder)
             folder = os.path.normpath(folder)
             if not str(folder).startswith(str(os.path.normpath(self.results_folder))):
                 print("Folder is not in the results folder. Redirecting to file browser.")
+                print("Folder: " + str(folder))
+                print("Results folder: " + str(self.results_folder))
                 return flask.redirect("/file_browser")
             # Get the last part of the folder path
+            folder = folder.replace(resource_path(""), "")
             upper_folder = "->".join(folder.replace("\\\\", "->").replace("\\", "->").replace("/", "->").split("->")[:-1])
             print(upper_folder)
             # Check if folder is a file or a directory
+            folder = resource_path(folder)
             if os.path.isfile(folder):
                 #Delete the file
                 os.remove(folder)
@@ -522,13 +604,23 @@ class Webpage:
             image_folder = folder.replace("->", "/") + "/"
             print(image_folder)
             folder = image_folder
+            folder = resource_path(folder)
             folder = os.path.normpath(folder)
+            print(folder)
             if not str(folder).startswith(str(os.path.normpath(self.results_folder))):
                 print("Folder is not in the results folder. Redirecting to file browser.")
+                print("Folder: " + str(folder))
+                print("Results folder: " + str(self.results_folder))
                 return flask.redirect("/file_browser")
             contents = []
             subfolders = []
+            # Get the last part of the folder path
+            folder = folder.replace(resource_path(""), "")
+            upper_folder = "->".join(folder.replace("\\\\", "->").replace("\\", "->").replace("/", "->").split("->")[:-1])
+            print(upper_folder)
             # Check if folder is a file or a directory
+            folder = resource_path(folder)
+            folder = os.path.normpath(folder)
             if os.path.isfile(folder):
                 # Serve the file directly as a download
                 filename = os.path.basename(folder)
@@ -591,7 +683,19 @@ class Webpage:
             for p in self.running_processes:
                 try:
                     print("Killing process: " + str(p))
-                    os.kill(p.pid, signal.SIGKILL)
+                    try:
+                        os.kill(p.pid, signal.SIGKILL)
+                    except:
+                        try:
+                            os.kill(p.pid, signal.SIGILL)
+                        except:
+                            try:
+                                os.kill(p.pid, signal.SIGINT)
+                            except:
+                                try:
+                                    os.kill(p.pid, signal.SIGQUIT)
+                                except:
+                                    os.kill(p.pid, signal.SIGTERM)
                 except Exception as e:
                     print(e)
                     print(traceback.format_exc())
@@ -620,15 +724,15 @@ class Webpage:
         def queue_analysis():
             mz = flask.request.args.get("mz", type=float)
             rt = flask.request.args.get("rt", type=float)
+            settings_dict = self.get_settings_dict()
             filename = flask.request.args.get("filename", type=str)
             if mz is None or rt is None or filename is None:
                 return flask.jsonify({"status": "error", "message": "Missing parameters"})
             with open(self.taskstorage_filepath, "a") as f:
-                f.write(filename + "\t" + str(mz) + "\t" + str(rt) + "\n")
+                f.write(filename + "\t" + str(mz) + "\t" + str(rt) + "\t" + str(settings_dict) + "\n")
             print("Task added to task storage file")
             return flask.jsonify({"status": "success", "message": "Task added to task storage file"})
         
-
         @self.app.route("/api/get_status", methods=["GET"])
         def get_status():
             try:
@@ -670,7 +774,6 @@ class Webpage:
                 "disk_path": self.parentfolder,
                 "version": str(self.version),
                 "python_version": str(self.python_version),
-                "flask_version": str(self.flask_version),
                 "server_uptime": str(round(server_uptime.days, 2)) + " days",
                 "script_runtime": str(round((datetime.datetime.now() - self.start_time).days, 2)) + " days",
                 "available_cores": str(self.num_cores_to_use),
@@ -690,14 +793,6 @@ class Webpage:
                 "pending_analyses": pending_analyses,
             }
             return flask.jsonify(status)
-
-    def __del__(self):
-        # Stop the Flask application when the object is deleted
-        if self.server is not None:
-            self.server.shutdown()
-        if self.thread is not None:
-            self.thread.join()
-        print("Webpage object deleted and server stopped")
 
     def get_settings_dict(self):
         settings_dict = {}
@@ -732,8 +827,7 @@ class Webpage:
                     last_check_time = self.check_and_load_new_task()
                     # Check if the running_processes list is still up to date
                     self.update_running_processes()
-                    while (datetime.datetime.now() - last_check_time).seconds < 0.5:
-                        time.sleep(0.1)
+                    time.sleep(0.1)
                 except Exception as e:
                     print(e)
                     print(traceback.format_exc())
@@ -790,17 +884,20 @@ class Webpage:
                 rt = lines[0].split("\t")[2]
                 mz = float(mz)
                 rt = float(rt)
+                settings_dict = ast.literal_eval(lines[0].split("\t")[3])
                 print("New task loaded: file: " + str(ms_filepath) + " mz: " + str(mz) + " rt: " + str(rt))
                 self.start_one_oa(ms_filepath,
                                     mz,
                                     rt,
                                     settings_dict,
                                     parentfolder_msfile)
+                print("Started new process for task: " + str(ms_filepath) + " mz: " + str(mz) + " rt: " + str(rt))
             except Exception as e:
                 print(e)
                 print(traceback.format_exc())
 
             # Remove the first line from the file
+            print("Removing first line from task storage file")
             lines = lines[1:]
             with open(self.taskstorage_filepath, "w") as f:
                 for line in lines:
@@ -822,6 +919,7 @@ class Webpage:
             if not p.is_alive():
                 print("Process " + str(p.name) + " is not alive. Removing it from the list.")
                 try:
+                    # process name looks like: UVenture_OA_starttime_20231001:120000_MZ_150.0_RT_1.0_FILE_test.mzML
                     self.process_times[p.name] = [datetime.datetime.strptime(p.name.split("starttime_")[1].split("_MZ_")[0], "%Y%m%d:%H%M%S"), datetime.datetime.now(), p.name.split("_FILE_")[1]]
                     self.update_best_time_approx_per_analysis()
                     print("Process " + str(p.name) + " finished. Time taken: " + str(self.process_times[p.name][1] - self.process_times[p.name][0]))
@@ -851,9 +949,13 @@ class Webpage:
         mz = float(mz)
         rt = float(rt)
         thread_name = ("UVenture_OA_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_MZ_" + str(mz) + "_RT_" + str(rt) + "_FILE_" + str(ms_filepath.split("/")[-1]))
+        print("Starting new process: " + thread_name)
         proc = multiprocessing.Process(target=caller_func, args=[ms_filepath, mz, rt, settings_dict, parentfolder_msfile], name=thread_name)
+        print("Process created: " + str(proc))
         proc.start()
+        print("Process started: " + str(proc))
         self.running_processes.append(proc)
+        print("Process added to running processes list")
         self.update_running_processes()
         
 
@@ -862,6 +964,7 @@ class Webpage:
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     webapp = Webpage()
     #webapp.app.run(host="0.0.0.0", debug=False, use_reloader=False, port=5000)
     webapp.app.run(debug=False, use_reloader=False, port=5000)

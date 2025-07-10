@@ -67,18 +67,31 @@ To run the program:
 3. Open the browser and go to *IP:5000*. Where IP stands for the IP address of the PC/Server where the script is executed. E.g. *127.0.0.1:5000* or *192.168.178.2:5000*.
    This allows remote access to the program from PCs connected to the same local network as the server.
 
+4. Remember to eventually update the provided formula cache (Formula Predictions) to support a larger m/z range. 
+
 ---
 
 ## Notes & Ideas for upcoming Versions
 Future updates are planned to include:
 
-- [ ] Convert proprietary raw data formats in .mzML files.
-- [ ] Improve batch processing capabilities. Allow to schedule multiple tasks/analyses.
+- [ ] Add file converter to .mzML format.
+- [x] Improve batch processing capabilities. Allow to schedule multiple tasks/analyses.
+- [x] Bug fix: File browser
+- [x] Add estimation for total runtime
+- [ ] Add API endpoints
+  - [x] Delete pending tasks
+  - [x] View pending tasks
+  - [ ] Add new task
 - [ ] Automatic peak detection.
-- [ ]    Smoothing / Background subtraction of XIC
-- [ ]    Detection of peaks (RT, FWHM, exact mass, mass deviation)  
-- [ ]    Detection of the type of ion. Either precursor ion or fragment ion.
-- [ ]    Deconvoluion of overlapping peaks.
+  - [ ] Smoothing / Background subtraction of XIC
+  - [ ] Detection of peaks (RT, FWHM, exact mass, mass deviation)  
+  - [ ] Detection of the type of ion. Either precursor ion or fragment ion.
+  - [ ] Deconvoluion of overlapping peaks.
+- [ ] Create a database search tool to handle large numbers of individual raw files.
+  - [ ] Detect peaks with a given m/z in every raw file (create XIC). E.g. see if PFOA can be found in the samples.
+  - [ ] Calculate sum formula and fragments of every peak for the given m/z value, for every raw file. Are it just isomers or completely different molecules.
+  - [ ] Compare the different fragmentation patterns and see if similar patterns can be found across the raw data files in the database. Those might then be the same molecules, although the LC method might have been different.
+  - [ ] Give a bar chart for every individual identified compound to directly compare the individual raw files.
 - [ ] Allow for GC/EI-HRMS data analysis with fragment annotation and precursor ion identification.
 
 ## Contributing
