@@ -22,7 +22,7 @@ Future versions with enhanced functionality and optimizations are planned and wi
 
 You can either follow the detailled manual installation instructions as shown in infos/installation_guide.md, or use the automatic installer script that is provided in `infos/startup.bat` (for Windows) or `infos/startup_linux.sh` for Linux based operating systems. In both cases, you need to install Python3 (3.12.0) manually and download & unpack this repository.
 
-### Automatic installation (recommended)
+## Automatic installation (recommended)
 
 **Step 1)** Install Python3 (3.12.0) on your system.  
 **Step 2)** Download and extract this repository on your computer.  
@@ -32,9 +32,8 @@ You can either follow the detailled manual installation instructions as shown in
 
 * To restart the program (e.g. after a reboot), just click on the same `startup.bat` or `startup_linux.sh` that was used in step 3.
 
----
 
-### Manual installation (see infos/installation_guide.md)
+## Manual installation (see infos/installation_guide.md)
 
 **Step 1)** Install Python3 (3.12.0).  
 **Step 2)** Download and extract this repository on your computer.  
@@ -44,8 +43,6 @@ You can either follow the detailled manual installation instructions as shown in
 **Step 6)** Start UVenture_web.py  
 
 * To restart the program (e.g. after a reboot), redo steps 3.1, 3.2, 4 and 6 from infos/installation_guide.md.
-
----
 
 ## Usage
 
