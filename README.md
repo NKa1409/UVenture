@@ -16,18 +16,6 @@ Future versions with enhanced functionality and optimizations are planned and wi
 -  Spectra, chromatograms and logfiles for every compound.
 -  Export of a summary file for easy downstream analysis.
 
-### Screenshots
-
-| Isolated MS² spectrum of Acetylsalicylic acid as captured with a data-dependent Measurement | Reconstructed MS² spectrum of Acetylsalicylic acid as captured by a data-independent (AIF) measurement and processed with the tool |
-|:------------------:|:--------------------------:|
-| ![Raw Spectra Screenshot](infos/images/isolatedMSMS.png) | ![Reconstructed Spectra Screenshot](infos/images/quasi_isolatedMSMS.png) |
-
-
-![Raw Spectra Screenshot](infos/images/WebsiteDescription.png)
-
-Image of the Homepage as can be seen when accessing *IP:5000*. To start a new analysis, a *.mzML file must be uploaded to the server and can then be selected in the dropdown menu. Select the desired type of analysis and click "Upload to server".
-
----
 
 # Installation & Usage
 
@@ -68,6 +56,20 @@ You can either follow the detailled manual installation instructions as shown in
 2. Remember to eventually update the provided formula cache (Formula Predictions) to support a larger m/z range. 
 
 ---
+
+### Screenshots
+
+| Isolated MS² spectrum of Acetylsalicylic acid as captured with a data-dependent Measurement | Reconstructed MS² spectrum of Acetylsalicylic acid as captured by a data-independent (AIF) measurement and processed with the tool |
+|:------------------:|:--------------------------:|
+| ![Raw Spectra Screenshot](infos/images/isolatedMSMS.png) | ![Reconstructed Spectra Screenshot](infos/images/quasi_isolatedMSMS.png) |
+
+
+![Raw Spectra Screenshot](infos/images/WebsiteDescription.png)
+
+Image of the Homepage as can be seen when accessing *IP:5000*. To start a new analysis, a *.mzML file must be uploaded to the server and can then be selected in the dropdown menu. Select the desired type of analysis and click "Upload to server".
+
+---
+
 
 # Notes & Ideas for upcoming Versions
 Future updates are planned to include:
