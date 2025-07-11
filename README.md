@@ -16,12 +16,11 @@ Future versions with enhanced functionality and optimizations are planned and wi
 -  Spectra, chromatograms and logfiles for every compound.
 -  Export of a summary file for easy downstream analysis.
 
+---
 
 # Installation & Usage
 
 You can either follow the detailled manual installation instructions as shown in infos/installation_guide.md, or use the automatic installer script that is provided in `infos/startup.bat` (for Windows) or `infos/startup_linux.sh` for Linux based operating systems. In both cases, you need to install Python3 (3.12.0) manually and download & unpack this repository.
-
----
 
 ### Automatic installation (recommended)
 
@@ -57,7 +56,7 @@ You can either follow the detailled manual installation instructions as shown in
 
 ---
 
-### Screenshots
+# Screenshots
 
 | Isolated MS² spectrum of Acetylsalicylic acid as captured with a data-dependent Measurement | Reconstructed MS² spectrum of Acetylsalicylic acid as captured by a data-independent (AIF) measurement and processed with the tool |
 |:------------------:|:--------------------------:|
