@@ -49,7 +49,6 @@ def remove_isotopo_signals(peak_df, mass_deviation_isotopo=2, height_deviation_i
     indices_to_delete = list(set(indices_to_delete))
     print("Indices to delete: " + str(indices_to_delete))
     peak_df.drop(indices_to_delete, inplace=True)
-    print("Peak df after deleting isotopo signals: " + str(peak_df))
     return peak_df
 
 def remove_duplicates_from_peak_df(peak_df, rt_bins=100, mass_deviation_isotopo=0.0007):
@@ -94,8 +93,7 @@ def get_all_possible_peaks_2(ms_file, settings_dict, mass_range=1,
                              min_peak_width=4, max_peak_width=40,
                              peaklist_filename="", mzrt_filename=""):
     if not isinstance(mass_range, int):
-        print("mass_range must be an integer")
-        print("Setting mass_range to 1")
+        print("mass_range must be an integer. Setting mass_range to 1")
         mass_range = 1
     min_mz, max_mz = ms_file.mz_range
     min_mz = int(min_mz)
@@ -137,10 +135,11 @@ def get_all_possible_peaks_2(ms_file, settings_dict, mass_range=1,
         # Remove duplicates
         #print("Peak df before removing duplicates: " + str(peak_df))
         peak_df = remove_duplicates_from_peak_df_2(peak_df, rt_bins=rt_bins, mass_deviation_ppm=7)
-        print("Peak df after removing duplicates: " + str(peak_df))
-
         # Remove isotopo signals
         peak_df = remove_isotopo_signals(peak_df, mass_deviation_isotopo=mass_deviation_isotopo, height_deviation_isotopo=height_deviation_isotopo)
+        print("Peak df after removing duplicates and isotopo signals: " + str(peak_df))
+
+        
 
         new_peak_df = peak_df.copy()
         for index, row in peak_df.iterrows():
@@ -175,14 +174,16 @@ def get_all_possible_peaks_2(ms_file, settings_dict, mass_range=1,
                         if not peaklist_filename == "":
                             # Save the peak to the peaklist file
                             with open(peaklist_filename, "a") as f:
-                                f.write(f"{new_row['mass']}\t{new_row['rt']}\t{new_row['area']}\t{new_row["height"]}\t{times[left]}\t{times[right]}\n")
+                                f.write(f"{new_row['mass']}\t{new_row['rt']}\t{round(new_row['area'], 2)}\t{round(new_row["height"], 2)}\t{times[left]}\t{times[right]}\n")
+                            print("Peak saved to peaklist: " + str(peaklist_filename) + ".")
                         if not mzrt_filename == "":
                             # Save the peak to the mzrt file to be processed directly
                             with open(mzrt_filename, "a") as f:
                                 file = os.path.normpath(ms_file.filename)
                                 file = file.split(os.sep)[-1]
-                                print(file)
+                                print("Taskstorage file: " + str(file))
                                 f.write(f"{file}\t{new_row['mass']}\t{new_row['rt']}\t{settings_dict}\n")
+                            print("Peak saved to mzrt file: " + str(mzrt_filename) + ".")
                         break
                 if not peak_found:
                     print("No peak found for mass: " + str(row["mass"]) + " RT: " + str(row["rt"]))

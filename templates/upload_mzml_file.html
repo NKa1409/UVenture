@@ -6,13 +6,13 @@
 <body>
     {% include 'navbar.html' %}
 
-    <h1>Upload MZML File</h1>
+    <h1>Upload MZML Files</h1>
     <span title="Upload new .mzML files. Added metadata will be saved in a file on the server for later usage." style="background-color:#263238;color:#fafafa;">&nbsp;?&nbsp;</span>&nbsp;&nbsp;&nbsp;&nbsp;
 
     <form id="uploadForm" action="/upload_mzml_file" method="post" enctype="multipart/form-data">
         <div class="form-group" style="margin-bottom: 20px;">
-            <label for="fileSelect">Select a file:</label>
-            <input type="file" id="file" name="file">
+            <label for="fileSelect">Files:</label>
+            <input type="file" id="file" name="file" multiple accept=".mzML">
         </div> 
         <br>
         <div class="form-group">
@@ -21,12 +21,12 @@
         </div>
         <br>
         <div class="form-group">
-            <label for="file_date_time">Date & Time (when sampled?):</label>
+            <label for="file_date_time">Date sampled:</label>
             <input type="datetime-local" id="file_date_time" name="file_date_time" placeholder="Date & time">
         </div>
         <br>
         <div class="form-group">
-            <label for="file_date_time_analyzed">Date & Time (when analyzed?):</label>
+            <label for="file_date_time_analyzed">Date measured:</label>
             <input type="datetime-local" id="file_date_time_analyzed" name="file_date_time_analyzed" placeholder="Date & time">
         </div>
         <br>

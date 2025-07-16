@@ -35,9 +35,10 @@ def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
         return
 
 def start_pd_process(ms_filepath, parentfolder, peaklist_filename, mzrt_filename, settings_dict):
+    threshold_intensity = settings_dict["pred_minimum_assumed_noise"] * 7
     ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder, **settings_dict)
     UVenture_peakdetection.get_all_possible_peaks_2(ms_file, settings_dict, mass_range=1, 
-                                        threshold_area=150000, threshold_intensity=50000, 
+                                        threshold_area=150000, threshold_intensity=threshold_intensity, 
                                         rt_bins=400, mass_deviation_isotopo=settings_dict["mass_deviation"]/5, height_deviation_isotopo=0.5,
                                         min_peak_width=4, max_peak_width=40,
                                         peaklist_filename=peaklist_filename, mzrt_filename=mzrt_filename)
@@ -112,6 +113,8 @@ class Webpage:
             self.available_files = os.listdir(self.mzml_folder)
             self.available_files = [f for f in self.available_files if f.endswith(".mzML")]
             self.start_background_task_checking()
+            if len(self.available_files) == 0:
+                return flask.redirect("/upload_mzml_file")
             settings_dict = self.get_settings_dict()
             if flask.request.method == "POST":
                 form_data = flask.request.form.to_dict()
@@ -306,6 +309,7 @@ class Webpage:
             try:
                 self.update_best_time_approx_per_analysis()
                 best_esimation_for_process_time = self.best_time_approx_per_analysis
+                print("Best estimation for process time: " + str(best_esimation_for_process_time))
             except Exception as e:
                 best_esimation_for_process_time = 0
                 print(e)
@@ -334,7 +338,6 @@ class Webpage:
             return flask.render_template("show_currently_running.html", tasks_information=tasks_information, 
                                          pending_analyses=pending_analyses, 
                                          unique_analysis_files=unique_analysis_files, 
-                                         best_esimation_for_process_time=best_esimation_for_process_time, 
                                          time_till_finished_hours=time_till_finished_hours, 
                                          finish_time=finish_time)
 
@@ -461,37 +464,45 @@ class Webpage:
         def detect_peaks():
             # Take the mzml file that the user has uploaded and perform a complete peak detection on the file. Store the results in a folder on the webserver_save/results/mzml file folder.
             # The user can select the mzml file from a dropdown menu.
-            available_mzml_files = os.listdir(self.mzml_folder)
-            available_mzml_files = [f for f in available_mzml_files if f.endswith(".mzML")]
+            self.available_files = os.listdir(self.mzml_folder)
+            self.available_files = [f for f in self.available_files if f.endswith(".mzML")]
+            self.start_background_task_checking()
+            if len(self.available_files) == 0:
+                return flask.redirect("/upload_mzml_file")
             if flask.request.method == "POST":
                 settings_dict = self.get_settings_dict()
                 mass_deviation = settings_dict["mass_deviation"]
-
                 form_data = flask.request.form.to_dict()
+                print("Form data received: ", form_data)
                 if not "fileselection" in form_data:
                     return flask.render_template_string("No file selected!")
                 start_analysis_once_detected = form_data.get("start_analysis_once_detected", "false")
+                if start_analysis_once_detected == "true":
+                    print("Start analysis once detected is set to true")
+                else:
+                    start_analysis_once_detected = False
+                    print("Start analysis once detected is set to false")
 
-                print(form_data)
                 if "fileselection" in form_data:
                     ms_filepath = self.mzml_folder + form_data["fileselection"]
                     parentfolder = self.parentfolder + "results/" + ".".join(form_data["fileselection"].split(".")[:-1]) + "/"
                     #UVenture_OA_starttime_20231001:12:00:00_MZ_
                     proc_name = "UVenture_peak_detection_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_MZ__FILE_" + str(form_data["fileselection"])
-                    print("Starting process: " + proc_name)
+                    print("Starting process for peak detection with filename: " + str(form_data["fileselection"] + " and start analysis once detected: " + str(start_analysis_once_detected)))
                     peaklist_filename = parentfolder + "peaklist.txt"
-                    taskstorage = ""
+                    taskstorage_empty = ""
                     if start_analysis_once_detected == "true" or start_analysis_once_detected == True:
                         #ms_filepath, parentfolder, peaklist_filename, mzrt_filename
-                        taskstorage = self.taskstorage_filepath
-                        p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, peaklist_filename, taskstorage, settings_dict), name=proc_name)
+                        taskstorage_true = self.taskstorage_filepath
+                        p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, peaklist_filename, taskstorage_true, settings_dict), name=proc_name)
                     else:
-                        p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, peaklist_filename, taskstorage, settings_dict), name=proc_name)
+                        p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, peaklist_filename, taskstorage_empty, settings_dict), name=proc_name)
                     p.start()
+                    print("Peak detection process started with name: " + p.name)
                     self.running_processes.append(p)
                     return flask.redirect("/show_currently_running")
 
-            return flask.render_template("detect_peaks.html", files=available_mzml_files)
+            return flask.render_template("detect_peaks.html", files=self.available_files)
 
 
         @self.app.route("/upload_mzml_file", methods=["POST", "GET"])
@@ -499,47 +510,35 @@ class Webpage:
             """If the user has uploaded a file, save it to the parent folder"""
             if flask.request.method == "POST":
                 # Check if the file is in the request
-                if "file" in flask.request.files:
-                    file = flask.request.files["file"]
-                    filename = werkzeug.utils.secure_filename(file.filename)
-                    form_data = flask.request.form.to_dict()
-                    print(form_data)
-                    uploader_info = {"client_ip": flask.request.remote_addr, "user_agent": flask.request.user_agent, "headers": flask.request.headers}
-                    uploader_info["cookies"] = flask.request.cookies
-                    uploader_info["url_params"] = flask.request.args
-                    uploader_info["fullpath"] = flask.request.full_path
-                    uploader_info["method"] = flask.request.method
-                    uploader_info["referrer"] = flask.request.referrer
-                    uploader_info["remote_user"] = flask.request.remote_user
-                    uploader_info["scheme"] = flask.request.scheme
-                    uploader_info["url"] = flask.request.url
-                    uploader_info["url_root"] = flask.request.url_root
-                    uploader_info["is_secure"] = flask.request.is_secure
-                    uploader_info["host"] = flask.request.host
-                    uploader_info["host_url"] = flask.request.host_url
-                    uploader_info["base_url"] = flask.request.base_url
-                    uploader_info["path"] = flask.request.path
-                    uploader_info["mime_type"] = flask.request.mimetype
-                
-                    # Check if the file is a mzML file
-                    if not filename.endswith(".mzML"):
-                        return flask.render_template_string("File must be in mzML format!")
-
-                    with open(self.mzml_folder + "file_metadata.txt", "a") as f:
-                        f.write(str(datetime.datetime.now().strftime("%D/%m/%Y, %H:%M:%S")) + "\t")
-                        f.write(str(filename) + "\t")
-                        f.write(str(form_data) + "\t")
-                        f.write(str(uploader_info) + "\n")
-                        
-                    #check if parentfolder exists. If not, create it
-                    os.makedirs(self.mzml_folder, exist_ok=True)
-                    #check if a file with the same name already exists
-                    if filename in self.available_files:
-                        return flask.render_template_string("File with the same name already exists!")
-                    file.save(self.mzml_folder + filename)
-
-                    self.available_files.append(filename)
+                form_data = flask.request.form.to_dict()
+                if len(flask.request.files) >= 1:
+                    uploaded_files = flask.request.files.getlist("file")
+                    filenames = []
+                    for file in uploaded_files:
+                        filename = werkzeug.utils.secure_filename(file.filename)
+                        if not filename.endswith(".mzML"):
+                            print("File is not a .mzML file: " + filename)
+                        if filename in self.available_files:
+                            print("File already exists: " + filename)
+                        #check if parentfolder exists. If not, create it
+                        os.makedirs(self.mzml_folder, exist_ok=True)
+                        file.save(self.mzml_folder + filename)
+                        self.available_files.append(filename)
+                        filenames.append(filename)
+                        uploader_info = self.get_request_info(flask.request)
+                        with open(self.mzml_folder + "file_metadata.txt", "a") as f:
+                            f.write(str(datetime.datetime.now().strftime("%D/%m/%Y, %H:%M:%S")) + "\t")
+                            f.write(str(filename) + "\t")
+                            f.write(str(form_data) + "\t")
+                            f.write(str(uploader_info) + "\n")
+                        print("File uploaded: " + filename + "with metadata: " + str(form_data) + " and uploader info: " + str(uploader_info))
+                    if not filenames:
+                        print("No valid mzML files uploaded!")
+                        return flask.render_template_string("No valid mzML files uploaded!")
                     return flask.redirect("/queue_new_analysis"), 200
+                else:
+                    return flask.render_template_string("No file selected!")
+
             return flask.render_template("upload_mzml_file.html")
 
         @self.app.route("/file_browser", methods=["GET", "POST"])
@@ -794,6 +793,26 @@ class Webpage:
             }
             return flask.jsonify(status)
 
+    
+    def get_request_info(self, request):
+        uploader_info = {"client_ip": request.remote_addr, "user_agent": request.user_agent, "headers": request.headers}
+        uploader_info["cookies"] = request.cookies
+        uploader_info["url_params"] = request.args
+        uploader_info["fullpath"] = request.full_path
+        uploader_info["method"] = request.method
+        uploader_info["referrer"] = request.referrer
+        uploader_info["remote_user"] = request.remote_user
+        uploader_info["scheme"] = request.scheme
+        uploader_info["url"] = request.url
+        uploader_info["url_root"] = request.url_root
+        uploader_info["is_secure"] = request.is_secure
+        uploader_info["host"] = request.host
+        uploader_info["host_url"] = request.host_url
+        uploader_info["base_url"] = request.base_url
+        uploader_info["path"] = request.path
+        uploader_info["mime_type"] = request.mimetype
+        return uploader_info
+    
     def get_settings_dict(self):
         settings_dict = {}
         with open(self.settings_file_filepath, "r") as f:
@@ -942,6 +961,15 @@ class Webpage:
         average_time_seconds = sum(times)/len(times)
         average_time_div_by_cores = average_time_seconds / self.num_cores_to_use
         self.best_time_approx_per_analysis = average_time_div_by_cores
+        
+        finished_process_counter = 0
+        for k, v in self.process_times.items():
+            if len(v) == 3:
+                if 360 <= (datetime.datetime.now()- v[0]).total_seconds() <= 14400: # between 0.1 hour and 4 hours
+                    finished_process_counter += 1
+        if finished_process_counter > 0:
+            self.best_time_approx_per_analysis = (14400 - 360) / finished_process_counter
+
         print("Best time approximation per analysis: " + str(self.best_time_approx_per_analysis))
         return self.best_time_approx_per_analysis
 

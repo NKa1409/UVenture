@@ -1573,7 +1573,7 @@ class OneAnalysis:
         if type_of_ion == "fragment_ion" and self.kwargs["oa_stop_if_oa_given_ion_is_a_fragment"] == True:
             self.make_oa_log_entry("INFO:\t" + "Stopping the prediction for the molecular ion, as the given mass is most likely to be a fragment.")
             if self.kwargs["oa_zip_folder_when_finished"] == True:
-                shutil.make_archive(self.ms_file.parentfolder + "/" + str(self.mass) + "_" + str(self.rt), "zip", self.kwargs["one_analysis_folder"])
+                shutil.make_archive(self.ms_file.parentfolder + "/" + str(round(self.mass, 5)) + "_" + str(round(self.rt, 3)), "zip", self.kwargs["one_analysis_folder"])
                 shutil.rmtree(self.kwargs["one_analysis_folder"])
             return
 
@@ -1582,7 +1582,7 @@ class OneAnalysis:
         if self.molecular_ion_prediction.peak_found == False and self.kwargs["oa_molecular_ion_only_calc_prediction_if_molecular_ion_peak_is_found"] == True:
             self.make_oa_log_entry("INFO:\t" + "No molecular ion prediction peak found. Stopping prediction...")
             if self.kwargs["oa_zip_folder_when_finished"] == True:
-                shutil.make_archive(self.ms_file.parentfolder + "/" + str(self.mass) + "_" + str(self.rt), "zip", self.kwargs["one_analysis_folder"])
+                shutil.make_archive(self.ms_file.parentfolder + "/" + str(round(self.mass, 5)) + "_" + str(round(self.rt, 3)), "zip", self.kwargs["one_analysis_folder"])
                 shutil.rmtree(self.kwargs["one_analysis_folder"])
             return
 
@@ -1590,7 +1590,7 @@ class OneAnalysis:
             print("No molecular ion prediction could be found! Returning....")
             self.make_oa_log_entry("INFO:\t" + "No molecular ion prediction could be found! Returning.....")
             if self.kwargs["oa_zip_folder_when_finished"] == True:
-                shutil.make_archive(self.ms_file.parentfolder + "/" + str(self.mass) + "_" + str(self.rt), "zip", self.kwargs["one_analysis_folder"])
+                shutil.make_archive(self.ms_file.parentfolder + "/" + str(round(self.mass, 5)) + "_" + str(round(self.rt, 3)), "zip", self.kwargs["one_analysis_folder"])
                 shutil.rmtree(self.kwargs["one_analysis_folder"])
             return
 
@@ -1630,11 +1630,11 @@ class OneAnalysis:
         write_to_summary_file_list.extend(self.true_fragment_list)
 
         for i in range(len(write_to_summary_file_list)):
-            if isinstance(write_to_summary_file_list[i], np.float64):
+            if isinstance(write_to_summary_file_list[i], np.float64) or isinstance(write_to_summary_file_list[i], np.float32):
                 write_to_summary_file_list[i] = float(write_to_summary_file_list[i])
             elif isinstance(write_to_summary_file_list[i], list):
                 for k in range(len(write_to_summary_file_list[i])):
-                    if isinstance(write_to_summary_file_list[i][k], np.float64):
+                    if isinstance(write_to_summary_file_list[i][k], np.float64) or isinstance(write_to_summary_file_list[i][k], np.float32):
                         write_to_summary_file_list[i][k] = float(write_to_summary_file_list[i][k])
         self.append_oa_summary_to_raw_file_summary(write_to_summary_file_list)
 
@@ -1654,7 +1654,7 @@ class OneAnalysis:
         self.plot_summary_xic_of_mi_and_fragments(oa_plt_save_filepath)
 
         if self.kwargs["oa_zip_folder_when_finished"] == True:
-            shutil.make_archive(self.ms_file.parentfolder + "/" + str(self.mass) + "_" + str(self.rt), "zip", self.kwargs["one_analysis_folder"])
+            shutil.make_archive(self.ms_file.parentfolder + "/" + str(round(self.mass, 5)) + "_" + str(round(self.rt, 3)), "zip", self.kwargs["one_analysis_folder"])
             shutil.rmtree(self.kwargs["one_analysis_folder"])
 
     def adjust_retention_time_to_peak_maximum(self, original_rt, max_rt_shift, xic):
@@ -1943,6 +1943,7 @@ class OneAnalysis:
         fig.clear()
 
     def append_oa_summary_to_raw_file_summary(self, summary_list):
+        self.make_oa_log_entry("INFO:\t" + "Appending summary to raw file summary. Summary list: " + str(summary_list))
         with open(self.ms_file.parentfolder + "/" + "SUMMARY.txt", "a") as oa_summary:
             for entry in summary_list:
                 oa_summary.write(str(entry) + "\t")
