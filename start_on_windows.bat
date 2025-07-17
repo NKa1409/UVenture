@@ -13,6 +13,7 @@ IF %ERRORLEVEL% NEQ 0 (
     echo.
 )
 
+:start_detection_process
 
 :: === Find or install Python ===
 SET "PYTHON_EXEC="
@@ -41,6 +42,7 @@ set "PYTHON_INSTALLER=python-installer.exe"
 powershell -Command "Invoke-WebRequest -Uri https://www.python.org/ftp/python/3.12.2/python-3.12.2-amd64.exe -OutFile '%PYTHON_INSTALLER%'"
 start /wait "" "%PYTHON_INSTALLER%" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0
 del "%PYTHON_INSTALLER%"
+goto :start_detection_process
 
 :: Try to find Python again after install
 FOR %%P IN ("%LocalAppData%\Programs\Python\Python3*\python.exe") DO (
