@@ -40,12 +40,14 @@ FOR %%P IN ("%LocalAppData%\Programs\Python\Python3*\python.exe") DO (
 echo Could not locate Python. Installing Python for current user...
 set "PYTHON_INSTALLER=python-installer.exe"
 powershell -Command "Invoke-WebRequest -Uri https://www.python.org/ftp/python/3.12.2/python-3.12.2-amd64.exe -OutFile '%PYTHON_INSTALLER%'"
-start /wait "" "%PYTHON_INSTALLER%" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0
+:: Get path to current script directory
+set "SCRIPT_DIR=%~dp0"
+:: Set Python install directory to a subfolder "python312" inside the script's directory
+set "PYTHON_TARGET=%SCRIPT_DIR%python312"
+:: Ensure the folder exists
+mkdir "%PYTHON_TARGET%"
+start /wait "" "%PYTHON_INSTALLER%" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0 TargetDir="%PYTHON_TARGET%"
 del "%PYTHON_INSTALLER%"
-:: Restart the script to reload environment
-echo Restarting script to refresh environment...
-start "" "%~f0" restarted
-exit /b
 
 :found_python
 echo Using Python at: %PYTHON_EXEC%
@@ -72,7 +74,7 @@ IF EXIST "%VENV_DIR%\Scripts\activate.bat" (
 REM === Create venv if it doesn't exist ===
 IF NOT EXIST "%VENV_DIR%\Scripts\activate.bat" (
     echo Creating virtual environment...
-    %PYTHON_EXEC% -m venv "%VENV_DIR%"
+    "%PYTHON_TARGET%\python.exe" -m venv "%VENV_DIR%"
 )
 
 REM === Activate venv ===
