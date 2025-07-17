@@ -18,7 +18,7 @@ IF %ERRORLEVEL% NEQ 0 (
 SET "PYTHON_EXEC="
 
 :: 1. Try global PATH
-where python >nul 2>nul
+python --version >nul 2>nul
 IF %ERRORLEVEL% EQU 0 (
     for /f "delims=" %%P in ('where python') do (
         SET "PYTHON_EXEC=%%P"
