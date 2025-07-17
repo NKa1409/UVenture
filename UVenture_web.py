@@ -16,16 +16,21 @@ from matplotlib import pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
 import werkzeug
-import UVenture
-import MS_functions
 import multiprocessing
-import UVenture_peakdetection
+
+import UVenture.MS_functions as MS_functions
+import UVenture.UVenture_peakdetection as UVenture_peakdetection
+import UVenture.UVenture as UVenture
+import UVenture.class_MS_file as class_MS_file
+import UVenture.class_Spec as class_Spec
+import UVenture.class_Prediction as class_Prediction
+
 
 
 def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
     try:
         print("Starting analysis for m/z: " + str(mz) + ", rt: " + str(rt) + ", ms_filepath: " + ms_filepath)
-        ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile, **settings_dict)
+        ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile, **settings_dict)
         print("MS file loaded")
         myanalysis = UVenture.OneAnalysis(ms_file, mz, rt, **settings_dict)
         return
@@ -36,14 +41,13 @@ def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
 
 def start_pd_process(ms_filepath, parentfolder, peaklist_filename, mzrt_filename, settings_dict):
     threshold_intensity = settings_dict["pred_minimum_assumed_noise"] * 7
-    ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=parentfolder, **settings_dict)
-    UVenture_peakdetection.get_all_possible_peaks_2(ms_file, settings_dict, mass_range=1, 
+    ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=parentfolder, **settings_dict)
+    UVenture_peakdetection.get_all_possible_peaks(ms_file, settings_dict, mass_range=1, 
                                         threshold_area=150000, threshold_intensity=threshold_intensity, 
                                         rt_bins=400, mass_deviation_isotopo=settings_dict["mass_deviation"]/5, height_deviation_isotopo=0.5,
                                         min_peak_width=4, max_peak_width=40,
                                         peaklist_filename=peaklist_filename, mzrt_filename=mzrt_filename)
     return
-
 
 def resource_path(relative_path):
     """ Get the absolute path to a resource, works for dev and PyInstaller .exe """
@@ -162,12 +166,12 @@ class Webpage:
                     def run_prediction_analysis():
                         try:
                             ms_filepath = self.mzml_folder + form_data["fileselection"]
-                            ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/")
+                            ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=self.results_folder + str(".".join(form_data["fileselection"].split(".")[:-1])) + "/")
                             settings_dict["spec_requested_filter_mode"] = settings_dict["spec_requested_filter_mode"]
-                            myspec = UVenture.Spec(ms_file, form_data["spec_index"], **settings_dict)
+                            myspec = class_Spec.Spec(ms_file, form_data["spec_index"], **settings_dict)
                             print("Spec created")
                             print("Starting mass prediction")
-                            myanalysis = UVenture.Prediction(ms_file, form_data["mz_mass_analysis"], myspec, **settings_dict)
+                            myanalysis = class_Prediction.Prediction(ms_file, form_data["mz_mass_analysis"], myspec, **settings_dict)
                         except Exception as e:
                             print(e)
                             print(traceback.format_exc())
@@ -384,7 +388,7 @@ class Webpage:
                     calc_new_file = True
                 if calc_new_file:
                     ms_filepath = self.mzml_folder + file_select
-                    self.curr_ms_file = UVenture.MS_File(ms_filepath, parentfolder_msfile=self.results_folder + str(".".join(file_select.split(".")[:-1])) + "/")
+                    self.curr_ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=self.results_folder + str(".".join(file_select.split(".")[:-1])) + "/")
                 print("MS file loaded")
                 if calc_new_file == False and (xic_mass in list(self.curr_xic_encoded_plot.keys())) and (mass_deviation == self.curr_mass_deviation):
                     print("XIC plot already calculated")
@@ -793,6 +797,13 @@ class Webpage:
             }
             return flask.jsonify(status)
 
+        @self.app.route('/favicon.ico')
+        def favicon():
+            return flask.send_from_directory(
+                os.path.join(resource_path("."), 'static'),
+                'uventure_icon.png', mimetype='image/png'
+            )
+
     
     def get_request_info(self, request):
         uploader_info = {"client_ip": request.remote_addr, "user_agent": request.user_agent, "headers": request.headers}
@@ -963,12 +974,20 @@ class Webpage:
         self.best_time_approx_per_analysis = average_time_div_by_cores
         
         finished_process_counter = 0
+        new_process_times = {}
         for k, v in self.process_times.items():
             if len(v) == 3:
                 if 360 <= (datetime.datetime.now()- v[0]).total_seconds() <= 14400: # between 0.1 hour and 4 hours
                     finished_process_counter += 1
+                new_process_times[k] = v
+        oldest_start_time_of_process = datetime.datetime.now()
+        for k, v in new_process_times.items():
+            if len(v) == 3:
+                if v[0] < oldest_start_time_of_process:
+                    oldest_start_time_of_process = v[0]
+        curr_runtime = (datetime.datetime.now() - oldest_start_time_of_process).total_seconds()
         if finished_process_counter > 0:
-            self.best_time_approx_per_analysis = (14400 - 360) / finished_process_counter
+            self.best_time_approx_per_analysis = (curr_runtime - 360) / finished_process_counter
 
         print("Best time approximation per analysis: " + str(self.best_time_approx_per_analysis))
         return self.best_time_approx_per_analysis

@@ -1,11 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-    
-</head>
-<body>
-    {% include 'navbar.html' %}
-    
+{% extends 'base.html' %}
+{% block title %}UVenture - Currently Running Tasks{% endblock %}
+
+
+
+{% block content %}
     <h1>Currently Running Tasks</h1>
     <p>
         Remaining tasks: {{ pending_analyses }}
@@ -22,5 +20,5 @@
         {% set previous_task_name = task.name %}
     {% endfor %}
     </ul>
-</body>
-</html>
+{% endblock %}
+

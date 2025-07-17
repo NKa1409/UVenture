@@ -1,15 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-    
-</head>
+{% extends 'base.html' %}
+{% block title %}UVenture - Detect Peaks{% endblock %}
 
 
 
-<body>
-    {% include 'navbar.html' %}
-
-
+{% block content %}
     <h1>Detect Peaks</h1>
     <form method="POST" action="/detect_peaks">
         <label for="fileselection">Select an mzML file:</label>
@@ -26,5 +20,4 @@
         <br><br>
         <button type="submit">Submit</button>
     </form>
-</body>
-</html>
+{% endblock %}

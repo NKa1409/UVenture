@@ -1,11 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-    
-</head>
-<body>
-    {% include 'navbar.html' %}
+{% extends 'base.html' %}
+{% block title %}UVenture - Download Results{% endblock %}
 
+
+
+{% block content %}
     <h1>Results downloader</h1>
 
     <form action="/resultsdownload" method="post" enctype="multipart/form-data">
@@ -31,7 +29,6 @@
         <br>
         <button id="download" name="download">Download results</button>
     </form>
+{% endblock %}
 
 
-</body>
-</html>

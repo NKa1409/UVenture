@@ -1,9 +1,21 @@
+<p align="center">
+  <img src="infos/images/uventure_icon.png" alt="UVenture" width="150" height="150">
+</p>
+
+## Table of Contents
+
+- **Introduction**
+- **Installation & Usage**
+- **Screenshots**
+- **Notes & Ideas for upcoming Versions**
+
+
 # UVenture
 
  **Analyze Full MS / AIF experiments and reconstruct quasi-isolated MS² spectra.**
  
 This repository contains the code for a tool developed to process high-resolution Full MS and All-Ion Fragmentation (AIF) mass spectrometry data.  
-The program allows researchers to reconstruct quasi-isolated MS² spectra from complex AIF datasets. By nature of the data-independent acquisition (DIA) that AIF is, more information are contained in the resulting measurement file compared to more traditional data-dependent acquisition (DDA) experiments.
+The program allows researchers to reconstruct quasi-isolated MS² spectra from complex AIF datasets. By nature of the data-independent acquisition (DIA) that AIF is, more information are contained in the resulting measurement file compared to more traditional data-dependent acquisition (DDA) experiments. Comparison with isolated dd-MS2 experiments revealed that the tool delivers comparable results to traditional/manual analysis. 
 In contrast to other programs, UVenture creates a local webserver that is reachable by all members of a team via a normal internet browser. The website provides a clean GUI for all interaction with the program.
 
 Future versions with enhanced functionality and optimizations are planned and will be published in this repository.
@@ -18,20 +30,23 @@ Future versions with enhanced functionality and optimizations are planned and wi
 
 ---
 
+<div style="page-break-after: always;"></div>
+
 # Installation & Usage
 
-You can either follow the detailled manual installation instructions as shown in infos/installation_guide.md, or use the automatic installer script that is provided in `infos/startup.bat` (for Windows) or `infos/startup_linux.sh` for Linux based operating systems. In both cases, you need to install Python3 (3.12.0) manually and download & unpack this repository.
+You can either follow the detailled manual installation instructions as shown in infos/installation_guide.md, or use the automatic installer script that is provided in `start_on_windows.bat` (for Windows) or `start_on_linux.sh` for Linux based operating systems. For new users it is strongly recommended to use the automatic installer script.
 
-## Automatic installation (recommended)
+<br>
 
-**Step 1)** Install Python3 (3.12.0) on your system.  
-**Step 2)** Download and extract this repository on your computer.  
-> For help with step 1 and 2 see `infos/installation_guide.md`.
+## Automatic installation (**recommended**)
 
-**Step 3)** Execute the `startup.bat` (for Windows) or `startup_linux.sh` (for Linux) script inside the infos folder. 
+**Step 1)** Download and extract the program folder on your computer.  
 
-* To restart the program (e.g. after a reboot), just click on the same `startup.bat` or `startup_linux.sh` that was used in step 3.
+**Step 2)** Double-click the `start_on_windows.bat` (for Windows) or `start_on_linux.sh` (for Linux) script. The installation will be handled automatically - please be patient, installation of the required packages might take a **long** time. Once finished, a new browser tab with the tool will open.
 
+* To restart the program (e.g. after a reboot), just click on the same `start_on_windows.bat` or `start_on_linux.sh` that was used in step 2.
+
+<br><br>
 
 ## Manual installation (see infos/installation_guide.md)
 
@@ -44,6 +59,8 @@ You can either follow the detailled manual installation instructions as shown in
 
 * To restart the program (e.g. after a reboot), redo steps 3.1, 3.2, 4 and 6 from infos/installation_guide.md.
 
+<br><br>
+
 ## Usage
 
 1. Open the browser and go to *IP:5000*. Where IP stands for the IP address of the PC/Server where the script is executed. E.g. *127.0.0.1:5000* or *192.168.178.2:5000*.
@@ -53,19 +70,23 @@ You can either follow the detailled manual installation instructions as shown in
 
 ---
 
+<div style="page-break-after: always;"></div>
+
 # Screenshots
+
+![Raw Spectra Screenshot](infos/images/WebsiteDescription.png)
+
+Image of the Homepage as can be seen when accessing *IP:5000*. To start a new analysis, a *.mzML file must be uploaded to the server and can then be selected in the dropdown menu. Select the desired type of analysis and click "Upload to server".
+
 
 | Isolated MS² spectrum of Acetylsalicylic acid as captured with a data-dependent Measurement | Reconstructed MS² spectrum of Acetylsalicylic acid as captured by a data-independent (AIF) measurement and processed with the tool |
 |:------------------:|:--------------------------:|
 | ![Raw Spectra Screenshot](infos/images/isolatedMSMS.png) | ![Reconstructed Spectra Screenshot](infos/images/quasi_isolatedMSMS.png) |
 
 
-![Raw Spectra Screenshot](infos/images/WebsiteDescription.png)
-
-Image of the Homepage as can be seen when accessing *IP:5000*. To start a new analysis, a *.mzML file must be uploaded to the server and can then be selected in the dropdown menu. Select the desired type of analysis and click "Upload to server".
-
 ---
 
+<div style="page-break-after: always;"></div>
 
 # Notes & Ideas for upcoming Versions
 Future updates are planned to include:
@@ -93,11 +114,14 @@ Future updates are planned to include:
   - [ ] Access controll for result files
 - [ ] Allow for GC/EI-HRMS data analysis with fragment annotation and precursor ion identification.
 
+
+<div style="page-break-after: always;"></div>
+
 ## Contributing
 Contributions and recommendations for upcoming versions are welcome!
 
 ## Citation
-If you use this software for your research, please cite:
+If you use this software for your research, please consider citing:
 > **Niklas Karbach, Thorsten Hoffmann**: github.com/NKa1409/UVenture
 
 

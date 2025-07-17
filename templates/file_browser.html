@@ -1,11 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-    
-</head>
-<body>
-    {% include 'navbar.html' %}
+{% extends 'base.html' %}
+{% block title %}UVenture - Files{% endblock %}
 
+
+
+{% block content %}
     <h1>File Browser</h1>
 
     <p>
@@ -48,5 +46,5 @@
             <br>
         {% endfor %}
     </ul>
-</body>
-</html>
+{% endblock %}
+

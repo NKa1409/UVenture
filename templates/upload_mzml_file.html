@@ -1,11 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-    
-</head>
-<body>
-    {% include 'navbar.html' %}
+{% extends 'base.html' %}
+{% block title %}UVenture - Upload .mzML{% endblock %}
 
+
+
+{% block content %}
     <h1>Upload MZML Files</h1>
     <span title="Upload new .mzML files. Added metadata will be saved in a file on the server for later usage." style="background-color:#263238;color:#fafafa;">&nbsp;?&nbsp;</span>&nbsp;&nbsp;&nbsp;&nbsp;
 
@@ -72,7 +70,6 @@
         <br>
         <input type="submit" value="Upload">
     </form>
+{% endblock %}
 
 
-</body>
-</html>

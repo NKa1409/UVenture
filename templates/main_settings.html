@@ -1,10 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-    
-</head>
-<body>
-    {% include 'navbar.html' %}
+{% extends 'base.html' %}
+{% block title %}UVenture - Main settings{% endblock %}
+
+
+
+{% block content %}
     <h1>Settings</h1>
 
     <form class="form-centered" action="/main_settings" method="post" style="padding: 10px;">
@@ -17,7 +16,6 @@
         <hr>
         <button type="submit" name="button" value="save_button" style="font-size: 20px; padding: 10px 20px; margin: 15px;">Save</button>
     </form>
+{% endblock %}
 
-    
-</body>
-</html>
+
