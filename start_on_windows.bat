@@ -42,15 +42,10 @@ set "PYTHON_INSTALLER=python-installer.exe"
 powershell -Command "Invoke-WebRequest -Uri https://www.python.org/ftp/python/3.12.2/python-3.12.2-amd64.exe -OutFile '%PYTHON_INSTALLER%'"
 start /wait "" "%PYTHON_INSTALLER%" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0
 del "%PYTHON_INSTALLER%"
-goto :start_detection_process
-
-:: Try to find Python again after install
-FOR %%P IN ("%LocalAppData%\Programs\Python\Python3*\python.exe") DO (
-    IF EXIST %%P (
-        SET "PYTHON_EXEC=%%P"
-        goto :found_python
-    )
-)
+:: Restart the script to reload environment
+echo Restarting script to refresh environment...
+start "" "%~f0" restarted
+exit /b
 
 :found_python
 echo Using Python at: %PYTHON_EXEC%
