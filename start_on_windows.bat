@@ -101,7 +101,7 @@ start "" /B python UVenture_web.py
 
 echo Waiting for server to start on http://localhost:5000 ...
 
-set /a wait_seconds=30
+set /a wait_seconds=120
 set /a waited=0
 
 :wait_for_server
