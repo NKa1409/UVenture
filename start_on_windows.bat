@@ -43,11 +43,11 @@ FOR %%P IN ("%LocalAppData%\Programs\Python\Python3*\python.exe") DO (
 )
 
 :: 4. Not found — install Python now
-echo Could not locate any version of Python on your system. Downloading the installer for Python 3.12.0.
+echo Could not locate any version of Python on your system. Downloading the installer for Python 3.12.2.
 echo This will not affect system-wide Python installations.
 echo Please wait while the file downloads and installs Python...
 set "PYTHON_INSTALLER=python-installer.exe"
-powershell -Command "Invoke-WebRequest -Uri https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe -OutFile '%PYTHON_INSTALLER%'"
+powershell -Command "Invoke-WebRequest -Uri https://www.python.org/ftp/python/3.12.2/python-3.12.2-amd64.exe -OutFile '%PYTHON_INSTALLER%'"
 :: Get path to current script directory
 set "SCRIPT_DIR=%~dp0"
 :: Set Python install directory to a subfolder "python312" inside the script's directory
