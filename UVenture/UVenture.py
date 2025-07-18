@@ -26,8 +26,8 @@ class OneAnalysis:
 
         self.peak_index = self.ms_file.rt_list.index(min(self.ms_file.rt_list, key=lambda x: abs(self.rt - x)))
 
-        default_kwargs = {"one_analysis_folder":str(self.ms_file.parentfolder + "/" + str(self.mass) + "_" + str(self.rt) + "/"),
-                          "oa_log_filepath":str(self.ms_file.parentfolder + "/" + str(self.mass) + "_" + str(self.rt) + "/" + "oa_log.txt"),
+        default_kwargs = {"one_analysis_folder":str(self.ms_file.parentfolder + str(self.mass) + "_" + str(self.rt) + "/"),
+                          "oa_log_filepath":str(self.ms_file.parentfolder + str(self.mass) + "_" + str(self.rt) + "/" + "oa_log.txt"),
                           "mass_deviation":11,
                           "charge_of_measured_mass":-1,
 
