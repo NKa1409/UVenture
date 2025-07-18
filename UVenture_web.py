@@ -54,10 +54,14 @@ def resource_path(relative_path):
     try:
         # PyInstaller creates a temp folder and stores the path in _MEIPASS
         base_path = sys._MEIPASS
-        return os.path.join(base_path, relative_path)
+        newpath = os.path.join(base_path, relative_path)
+        return newpath
     except AttributeError:
         base_path = os.path.abspath(".")
-        return os.path.join("./", relative_path)
+        newpath = os.path.join("./", relative_path)
+        if newpath.startswith("././"): 
+            newpath = newpath.replace("././", "./")
+        return newpath
 
 
 class Webpage:
