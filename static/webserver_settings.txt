@@ -1,0 +1,15 @@
+# Webserver settings file
+# This file is used to configure the webserver settings.
+# You can change the settings by editing this file.
+# The settings are in the format: key=value
+# Available settings:
+# debug: True or False (default: False)
+# load_dotenv: True or False (default: False)
+# host: The host to run the webserver on (default: 127.0.0.1)
+# port: The port to run the webserver on (default: 5000)
+#
+#
+debug=False
+load_dotenv=False
+host=127.0.0.1
+port=5000
