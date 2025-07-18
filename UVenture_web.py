@@ -1008,13 +1008,89 @@ class Webpage:
 
 
 
+def get_selected_interface():
+    webserver_settings_filepath = resource_path("static/webserver_settings.txt")
+    if not os.path.exists(webserver_settings_filepath):
+        print("Webserver settings file does not exist. Creating it with default settings. -- LOCAL ONLY --")
+        with open(webserver_settings_filepath, "w") as f:
+            f.write("# Webserver settings file\n")
+            f.write("# This file is used to configure the webserver settings.\n")
+            f.write("# You can change the settings by editing this file.\n")
+            f.write("# The settings are in the format: key=value\n")
+            f.write("# Available settings:\n")
+            f.write("# debug: True or False (default: False)\n")
+            f.write("# load_dotenv: True or False (default: False)\n")
+            f.write("# host: The host to run the webserver on (default: 127.0.0.1). If you want to host the webserver on all IPs use 0.0.0.0\n")
+            f.write("# port: The port to run the webserver on (default: 5000)\n")
+            f.write("#\n")
+            f.write("#\n")
+            f.write("debug=False\n")
+            f.write("load_dotenv=False\n")
+            f.write("host=127.0.0.1\n")
+            f.write("port=5000\n")
+    with open(webserver_settings_filepath, "r") as f:
+        lines = f.readlines()
+    lines = [line.strip() for line in lines if line.strip() != "" and not line.startswith("#")]
+    settings_dict = {}
+    for line in lines:
+        if "=" in line:
+            key, value = line.split("=")
+            settings_dict[key.strip()] = value.strip()
+    true_parameters = ["debug", "load_dotenv", "host", "port"]
+    pop_keys = []
+    for k, v in settings_dict.items():
+        if k not in true_parameters:
+            pop_keys.append(k)
+    for k in pop_keys:
+        with open(webserver_settings_filepath, "r") as f:
+            file_contents = f.read()
+            file_contents = file_contents.replace(k + "=" + str(settings_dict[k]), "")
+            file_contents = file_contents.replace(k + "=" + str(settings_dict[k]).lower(), "")
+        with open(webserver_settings_filepath, "w") as f:
+            f.write(file_contents)
+        settings_dict.pop(k, None)
+    for k, v in settings_dict.items():
+        if k == "port":
+            try:
+                settings_dict[k] = int(v)
+            except ValueError:
+                print(f"Invalid port number: {v}. Using default port 5000.")
+                settings_dict[k] = 5000
+        elif k == "debug":
+            if v.lower() in ["true", "1"]:
+                settings_dict[k] = True
+            elif v.lower() in ["false", "0"]:
+                settings_dict[k] = False
+            else:
+                print(f"Invalid debug value: {v}. Using default debug=False.")
+                settings_dict[k] = False
+        elif k == "load_dotenv":
+            if v.lower() in ["true", "1"]:
+                settings_dict[k] = True
+            elif v.lower() in ["false", "0"]:
+                settings_dict[k] = False
+            else:
+                print(f"Invalid load_dotenv value: {v}. Using default load_dotenv=False.")
+                settings_dict[k] = False
+    if "host" not in settings_dict:
+        settings_dict["host"] = "127.0.0.1"
+        if "port" not in settings_dict:
+            settings_dict["port"] = 5000
+    if "debug" not in settings_dict:
+        settings_dict["debug"] = False
+    if "load_dotenv" not in settings_dict:
+        settings_dict["load_dotenv"] = False
+    print("Webserver settings loaded: " + str(settings_dict))
+    return settings_dict
+
 
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
     webapp = Webpage()
     #webapp.app.run(host="0.0.0.0", debug=False, use_reloader=False, port=5000)
-    webapp.app.run(debug=False, use_reloader=False, port=5000)
+    webserver_settings = get_selected_interface()
+    webapp.app.run(**webserver_settings)
     print("Server running")
     while True:
         time.sleep(1)

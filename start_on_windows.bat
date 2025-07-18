@@ -13,12 +13,18 @@ IF %ERRORLEVEL% NEQ 0 (
     echo.
 )
 
-:start_detection_process
-
 :: === Find or install Python ===
 SET "PYTHON_EXEC="
 
-:: 1. Try global PATH
+:: 1. Try local folder python312 in script directory
+echo Python not found in default user installation path. Checking in UVenture folder...
+SET "LOCAL_PYTHON=%~dp0python312\python.exe"
+IF EXIST "%LOCAL_PYTHON%" (
+    SET "PYTHON_EXEC=%LOCAL_PYTHON%"
+    goto :found_python
+)
+
+:: 2. Try global PATH
 python --version >nul 2>nul
 IF %ERRORLEVEL% EQU 0 (
     for /f "delims=" %%P in ('where python') do (
@@ -27,7 +33,7 @@ IF %ERRORLEVEL% EQU 0 (
     )
 )
 
-:: 2. Try default user install location
+:: 3. Try default user install location
 echo Python not found in PATH. Looking for default user installation...
 FOR %%P IN ("%LocalAppData%\Programs\Python\Python3*\python.exe") DO (
     IF EXIST %%P (
@@ -36,16 +42,10 @@ FOR %%P IN ("%LocalAppData%\Programs\Python\Python3*\python.exe") DO (
     )
 )
 
-:: 3. Try local folder python312 in script directory
-echo Python not found in default user installation path. Checking in UVenture folder...
-SET "LOCAL_PYTHON=%~dp0python312\python.exe"
-IF EXIST "%LOCAL_PYTHON%" (
-    SET "PYTHON_EXEC=%LOCAL_PYTHON%"
-    goto :found_python
-)
-
-:: 3. Not found — install Python now
-echo Could not locate Python. Installing Python for current user...
+:: 4. Not found — install Python now
+echo Could not locate any version of Python on your system. Downloading the installer for Python 3.12.0.
+echo This will not affect system-wide Python installations.
+echo Please wait while the file downloads and installs Python...
 set "PYTHON_INSTALLER=python-installer.exe"
 powershell -Command "Invoke-WebRequest -Uri https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe -OutFile '%PYTHON_INSTALLER%'"
 :: Get path to current script directory
@@ -57,8 +57,26 @@ mkdir "%PYTHON_TARGET%"
 start /wait "" "%PYTHON_INSTALLER%" /quiet InstallAllUsers=0 PrependPath=0 Include_test=0 TargetDir="%PYTHON_TARGET%"
 del "%PYTHON_INSTALLER%"
 
+
+SET "PYTHON_EXEC=%PYTHON_TARGET%\python.exe"
+
 :found_python
 echo Using Python at: %PYTHON_EXEC%
+
+:: Check if Python is version 3.12.2 or higher
+FOR /F "tokens=2 delims=." %%A IN ('"%PYTHON_EXEC%" --version 2^>nul') DO (
+    IF %%A LSS 12 (
+        echo [ERROR] Python version 3.12.2 or higher is required.
+        echo Please install the correct version of Python and try again.
+        exit /b 1
+    ) ELSE (
+        echo Python version is sufficient: %%A
+    )
+)
+
+:: Print the python version
+"%PYTHON_EXEC%" --version
+
 
 REM Now use "%PYTHON_EXEC%" instead of "python" for venv, pip, running scripts, etc.
 
@@ -82,7 +100,7 @@ IF EXIST "%VENV_DIR%\Scripts\activate.bat" (
 REM === Create venv if it doesn't exist ===
 IF NOT EXIST "%VENV_DIR%\Scripts\activate.bat" (
     echo Creating virtual environment...
-    "%PYTHON_TARGET%\python.exe" -m venv "%VENV_DIR%"
+    "%PYTHON_EXEC%" -m venv "%VENV_DIR%"
 )
 
 REM === Activate venv ===
@@ -106,14 +124,43 @@ IF EXIST requirements.txt (
 echo Running UVenture_web.py...
 start "" /B python UVenture_web.py
 
-echo Waiting for server to start on http://localhost:5000 ...
+:: === Get the configuration file from static/webserver_settings.txt and extract the host and port. ===
+set "webserver_settings_filepath=static\webserver_settings.txt"
+IF NOT EXIST "%webserver_settings_filepath%" (
+    echo Webserver settings file not found. Default settings will be used.
+    echo host=127.0.0.1
+    echo port=5000
+) ELSE (
+    echo Webserver settings file found.
+)
+:: Read the settings from the file
+set "host="
+set "port="
+
+for /f "usebackq tokens=1,2 delims==" %%A in ("%webserver_settings_filepath%") do (
+    if "%%A"=="host" set "host=%%B"
+    if "%%A"=="port" set "port=%%B"
+)
+IF NOT DEFINED host (
+    set "host=127.0.0.1"
+    set "port=5000"
+    echo Using default host: %host%
+) ELSE (
+    echo Using host from settings: %host%
+)
+:: If host is 0.0.0.0, change it to 127.0.0.1
+IF "%host%"=="0.0.0.0" (
+    set "host=127.0.0.1"
+)
+
+echo Waiting for server to start on http://%host%:%port% ...
 
 set /a wait_seconds=120
 set /a waited=0
 
 :wait_for_server
 powershell -Command ^
-  "$r=0; try { $r=(Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:5000' -TimeoutSec 1).StatusCode } catch {}; if ($r -eq 200) { exit 0 } else { exit 1 }"
+  "$r=0; try { $r=(Invoke-WebRequest -UseBasicParsing -Uri 'http://%host%:%port%' -TimeoutSec 1).StatusCode } catch {}; if ($r -eq 200) { exit 0 } else { exit 1 }"
 IF %ERRORLEVEL%==0 (
     echo Server is up!
     goto :launch_browser
@@ -130,6 +177,6 @@ IF %waited% LSS %wait_seconds% (
 )
 
 :launch_browser
-start "" http://127.0.0.1:5000
+start "" http://%host%:%port%
 
 pause
