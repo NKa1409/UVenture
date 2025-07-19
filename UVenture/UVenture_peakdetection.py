@@ -4,7 +4,7 @@ import sys
 import pandas as pd
 import numpy as np
 
-import UVenture.UVenture as UVenture
+import UVenture.class_Spec as class_Spec
 import UVenture.peakdetection_funcs as peakdetection_funcs
 import UVenture.MS_functions as MS_functions
 
@@ -91,7 +91,7 @@ def get_all_possible_peaks(ms_file, settings_dict, mass_range=1,
             area = np.trapz(smoothed_intensity[left:right], dx=(times[1] - times[0]))
             if area <= threshold_area:
                 continue
-            spec = UVenture.Spec(ms_file, true_indices_of_entries[peaks[peak]], spec_requested_filter_mode="Full scan", mass_deviation=mass_range)
+            spec = class_Spec.Spec(ms_file, true_indices_of_entries[peaks[peak]], spec_requested_filter_mode="Full scan", mass_deviation=mass_range)
             interesting_range = {k: v for k, v in spec.summarized_mass_intensity_dict.items() if k > mass-(mass_range*1.1) and k < mass+(mass_range*1.1)}
             interesting_range = {k: v for k, v in interesting_range.items() if v > threshold_intensity}
             for k, v in interesting_range.items():
