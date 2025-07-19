@@ -44,7 +44,8 @@ FOR %%P IN ("%LocalAppData%\Programs\Python\Python3*\python.exe") DO (
 
 :: 4. Not found — install Python now
 echo Could not locate any version of Python on your system. Downloading the installer for Python 3.12.2.
-
+echo This will not affect system-wide Python installations.
+echo Please wait while the file downloads and installs Python...
 set "PYTHON_INSTALLER=python-installer.exe"
 powershell -Command "Invoke-WebRequest -Uri https://www.python.org/ftp/python/3.12.2/python-3.12.2-amd64.exe -OutFile '%PYTHON_INSTALLER%'"
 :: Get path to current script directory
@@ -53,45 +54,14 @@ set "SCRIPT_DIR=%~dp0"
 set "PYTHON_TARGET=%SCRIPT_DIR%python312"
 :: Ensure the folder exists
 mkdir "%PYTHON_TARGET%"
-echo File has downloaded. Please follow the installation procedure. 
-echo Once the installation is finished, please disable the path limit in the installation wizzard. Otherwise the program will not work properly!
-set /p DUMMY=Hit ENTER to continue...
-
-start /wait "" "%PYTHON_INSTALLER%" InstallAllUsers=0 PrependPath=0 Include_test=0 TargetDir="%PYTHON_TARGET%"
+start /wait "" "%PYTHON_INSTALLER%" /quiet InstallAllUsers=0 PrependPath=0 Include_test=0 TargetDir="%PYTHON_TARGET%"
 del "%PYTHON_INSTALLER%"
 
 
 SET "PYTHON_EXEC=%PYTHON_TARGET%\python.exe"
 
-
-
-
-
-
 :found_python
 echo Using Python at: %PYTHON_EXEC%
-
-
-reg query "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo LongPathsEnabled is not set. Long path support is DISABLED.
-    exit /b 1
-)
-
-for /f "tokens=3" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled ^| find "LongPathsEnabled"') do (
-    set value=%%A
-)
-
-if "%value%"=="0x1" (
-    echo Long path support is ENABLED.
-) else (
-    echo Long path support is DISABLED.
-    echo Long path will be ENABLED now to properly run the program.
-    reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
-)
-
-
-
 
 :: Check if Python is version 3.12.2 or higher
 FOR /F "tokens=2 delims=." %%A IN ('"%PYTHON_EXEC%" --version 2^>nul') DO (
