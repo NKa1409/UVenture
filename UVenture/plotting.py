@@ -91,6 +91,8 @@ def create_barchart_massspec_with_go(masses, intensities, plot_filepath):
     for mass, intensity in top_10_data:
         go_fig.add_annotation(x=mass, y=intensity, text=str(mass), showarrow=False, font=dict(size=12, color="Black"), bgcolor="White", opacity=0.8, textangle=-90)
     go_fig.update_layout(plot_bgcolor='white')
+    plot_filepath = os.path.normpath(plot_filepath)
+    os.makedirs(os.path.dirname(plot_filepath), exist_ok=True)
     go_fig.write_html(plot_filepath)
 
 
@@ -114,7 +116,8 @@ def create_barchart_massspec(masses, intensities, title, image_filepath):
 
     ax.set_title(title)
     matplotlib.rcParams.update({'figure.autolayout': True})
-    
+    image_filepath = os.path.normpath(image_filepath)
+    os.makedirs(os.path.dirname(image_filepath), exist_ok=True)
     fig.savefig(image_filepath, bbox_inches='tight', dpi=DPI)
     fig.clf()
     fig.clear()
@@ -162,6 +165,8 @@ def create_isotopo_plot(spec_masses, spec_intensities, formula_to_simulate, file
     for a in ax:
         a.legend()
     matplotlib.rcParams.update({'figure.autolayout': True})
+    filepath = os.path.normpath(filepath)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
     fig.savefig(filepath, bbox_inches='tight', dpi=DPI)
     fig.clf()
     fig.clear()
@@ -189,6 +194,8 @@ def create_isotopo_plot_with_go(spec_masses, spec_intensities, formula_to_simula
     fig.update_yaxes(range=[-1, 1], showline=True, linewidth=2, linecolor='black', showgrid=True, gridwidth=1, gridcolor="Gray", )
     fig.update_layout(shapes=[dict(type="rect", xref="paper", yref="paper", x0=0, y0=0, x1=1, y1=1, line=dict(color="Black", width=4))],
                         barmode='overlay', title_text="Isotopologues Plot", xaxis_title="masses / Da", yaxis_title="intensity / a.u.", plot_bgcolor='white')
+    filepath = os.path.normpath(filepath)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
     fig.write_html(filepath)
     return True
 
@@ -213,6 +220,8 @@ def create_xic(rt_list, intensities, title, filepath, retention_time=0):
     ax.set_ylabel("intensity / a.u.")
     ax.set_title(title, wrap=True)
     ax.legend()
+    filepath = os.path.normpath(filepath)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
     fig.savefig(filepath, bbox_inches='tight', dpi=DPI)
     fig.clf()
     fig.clear()
@@ -314,6 +323,8 @@ def create_oa_summary_plot(oa_summary_object, true_fragment_list, best_frag_spec
         ax.legend()
 
     matplotlib.rcParams.update({'figure.autolayout': True})
+    save_filepath = os.path.normpath(save_filepath)
+    os.makedirs(os.path.dirname(save_filepath), exist_ok=True)
     fig.savefig(save_filepath, bbox_inches='tight', dpi=DPI)
     fig.clf()
     fig.clear()
@@ -330,6 +341,8 @@ def create_xic_matching_plot(peak1_rt, peakintensity1, peak2_rt, peakintensity2,
     ax.set_ylabel("normalized intensity / a.u.")
     ax.legend()
     matplotlib.rcParams.update({'figure.autolayout': True})
+    save_filepath = os.path.normpath(save_filepath)
+    os.makedirs(os.path.dirname(save_filepath), exist_ok=True)
     fig.savefig(save_filepath, bbox_inches='tight', dpi=DPI)
     fig.clf()
     fig.clear()

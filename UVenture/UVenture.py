@@ -26,8 +26,8 @@ class OneAnalysis:
 
         self.peak_index = self.ms_file.rt_list.index(min(self.ms_file.rt_list, key=lambda x: abs(self.rt - x)))
 
-        default_kwargs = {"one_analysis_folder":str(self.ms_file.parentfolder + str(self.mass) + "_" + str(self.rt) + "/"),
-                          "oa_log_filepath":str(self.ms_file.parentfolder + str(self.mass) + "_" + str(self.rt) + "/" + "oa_log.txt"),
+        default_kwargs = {"one_analysis_folder":os.path.join(self.ms_file.parentfolder, str(self.mass) + "_" + str(self.rt)),
+                          "oa_log_filepath":os.path.join(self.ms_file.parentfolder, str(self.mass) + "_" + str(self.rt), "oa_log.txt"),
                           "mass_deviation":11,
                           "charge_of_measured_mass":-1,
 
@@ -115,8 +115,8 @@ class OneAnalysis:
 
         if self.kwargs["oa_save_xic_plot"] == True:
             print("Saving XIC plot...")
-            self.xic_plot_filepath = self.kwargs["one_analysis_folder"] + "xic_" + str(round(self.mass, 4)) + "+-" + str( round(((self.kwargs["mass_deviation"]*self.mass) / 1000000), 4) ) + "_" + str(
-                                    self.kwargs["oa_xic_requested_filter_mode"]) + ".png"
+            self.xic_plot_filepath = os.path.join(self.kwargs["one_analysis_folder"], "xic_" + str(round(self.mass, 4)) + "+-" + str( round(((self.kwargs["mass_deviation"]*self.mass) / 1000000), 4) ) + "_" + str(
+                                    self.kwargs["oa_xic_requested_filter_mode"].replace(" ", "_")) + ".png")
             title = "Extracted Ion Chromatogram (XIC) for mass: " + str(round(self.mass, 4)) + " at retention time: " + str(round(self.rt, 4)) + " sec"
             plotting.create_xic(self.xic[0], self.xic[1], title=title, filepath=self.xic_plot_filepath, retention_time=self.rt)
         
@@ -127,7 +127,7 @@ class OneAnalysis:
             self.full_scan_spec = class_Spec.Spec(self.ms_file, 
                                              self.peak_index, 
                                              spec_requested_filter_mode="Full scan", 
-                                             absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/", 
+                                             absolute_spec_folder=os.path.join(self.kwargs["one_analysis_folder"], "spectra"), 
                                              mass_deviation=self.kwargs["mass_deviation"],
                                              spec_save_matplotlib_plot=self.kwargs["oa_spec_acquisition_save_matplotlib_plot"],
                                              spec_save_go_plot=self.kwargs["oa_spec_acquisition_save_go_plot"],
@@ -148,7 +148,7 @@ class OneAnalysis:
             self.aif_spec = class_Spec.Spec(self.ms_file, 
                                        self.peak_index, 
                                        spec_requested_filter_mode="AIF", 
-                                       absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/", 
+                                       absolute_spec_folder=os.path.join(self.kwargs["one_analysis_folder"], "spectra"), 
                                        mass_deviation=self.kwargs["mass_deviation"],
                                        spec_save_matplotlib_plot=self.kwargs["oa_spec_acquisition_save_matplotlib_plot"],
                                        spec_save_go_plot=self.kwargs["oa_spec_acquisition_save_go_plot"],
@@ -168,7 +168,7 @@ class OneAnalysis:
             self.ms_ms_spec = class_Spec.Spec(self.ms_file, 
                                          self.peak_index, 
                                          spec_requested_filter_mode="MS/MS", 
-                                         absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/", 
+                                         absolute_spec_folder=os.path.join(self.kwargs["one_analysis_folder"], "spectra"), 
                                          mass_deviation=self.kwargs["mass_deviation"], 
                                          spec_requested_ms_ms_mass=self.mass,
                                          spec_save_matplotlib_plot=self.kwargs["oa_spec_acquisition_save_matplotlib_plot"],
@@ -217,7 +217,7 @@ class OneAnalysis:
         if type_of_ion == "fragment_ion" and self.kwargs["oa_stop_if_oa_given_ion_is_a_fragment"] == True:
             self.make_oa_log_entry("INFO:\t" + "Stopping the prediction for the molecular ion, as the given mass is most likely to be a fragment.")
             if self.kwargs["oa_zip_folder_when_finished"] == True:
-                shutil.make_archive(self.ms_file.parentfolder + "/" + str(round(self.mass, 5)) + "_" + str(round(self.rt, 3)), "zip", self.kwargs["one_analysis_folder"])
+                shutil.make_archive(os.path.join(self.ms_file.parentfolder, str(round(self.mass, 5)) + "_" + str(round(self.rt, 3))), "zip", self.kwargs["one_analysis_folder"])
                 shutil.rmtree(self.kwargs["one_analysis_folder"])
             return
 
@@ -226,7 +226,7 @@ class OneAnalysis:
         if self.molecular_ion_prediction.peak_found == False and self.kwargs["oa_molecular_ion_only_calc_prediction_if_molecular_ion_peak_is_found"] == True:
             self.make_oa_log_entry("INFO:\t" + "No molecular ion prediction peak found. Stopping prediction...")
             if self.kwargs["oa_zip_folder_when_finished"] == True:
-                shutil.make_archive(self.ms_file.parentfolder + "/" + str(round(self.mass, 5)) + "_" + str(round(self.rt, 3)), "zip", self.kwargs["one_analysis_folder"])
+                shutil.make_archive(os.path.join(self.ms_file.parentfolder, str(round(self.mass, 5)) + "_" + str(round(self.rt, 3))), "zip", self.kwargs["one_analysis_folder"])
                 shutil.rmtree(self.kwargs["one_analysis_folder"])
             return
 
@@ -234,7 +234,7 @@ class OneAnalysis:
             print("No molecular ion prediction could be found! Returning....")
             self.make_oa_log_entry("INFO:\t" + "No molecular ion prediction could be found! Returning.....")
             if self.kwargs["oa_zip_folder_when_finished"] == True:
-                shutil.make_archive(self.ms_file.parentfolder + "/" + str(round(self.mass, 5)) + "_" + str(round(self.rt, 3)), "zip", self.kwargs["one_analysis_folder"])
+                shutil.make_archive(os.path.join(self.ms_file.parentfolder, str(round(self.mass, 5)) + "_" + str(round(self.rt, 3))), "zip", self.kwargs["one_analysis_folder"])
                 shutil.rmtree(self.kwargs["one_analysis_folder"])
             return
 
@@ -285,18 +285,18 @@ class OneAnalysis:
         self.make_oa_log_entry("INFO:\t" + "Finished appending summary to raw file summary...")
         self.make_oa_log_entry("INFO:\t" + "Creating summary plot and txt file...")
         try:
-            save_filepath = self.kwargs["one_analysis_folder"] + "oa_summary_plot.png"
+            save_filepath = os.path.join(self.kwargs["one_analysis_folder"], "oa_summary_plot.png")
             plotting.create_oa_summary_plot(self, self.true_fragment_list, self.best_frag_spec, self.fragment_predictions, save_filepath)
         except Exception as e:
             self.make_oa_log_entry("ERROR:\t" + "Error while creating summary plot: " + str(e))
             print("Error while creating summary plot: " + str(e))
             print(traceback.format_exc())
         self.make_oa_log_entry("INFO:\t" + "Summary plot saved at: " + str(save_filepath))
-        oa_txt_save_filepath = self.kwargs["one_analysis_folder"] + "BEST_FORMULA_PREDICTION.txt"
+        oa_txt_save_filepath = os.path.join(self.kwargs["one_analysis_folder"], "BEST_FORMULA_PREDICTION.txt")
         self.create_oa_summary_txtfile(self.true_fragment_list, self.fragment_predictions, oa_txt_save_filepath)
 
         if self.kwargs["oa_zip_folder_when_finished"] == True:
-            shutil.make_archive(self.ms_file.parentfolder + "/" + str(round(self.mass, 5)) + "_" + str(round(self.rt, 3)), "zip", self.kwargs["one_analysis_folder"])
+            shutil.make_archive(os.path.join(self.ms_file.parentfolder, str(round(self.mass, 5)) + "_" + str(round(self.rt, 3))), "zip", self.kwargs["one_analysis_folder"])
             shutil.rmtree(self.kwargs["one_analysis_folder"])
 
     def adjust_retention_time_to_peak_maximum(self, original_rt, max_rt_shift, xic):
@@ -353,7 +353,7 @@ class OneAnalysis:
         self.spec_before = class_Spec.Spec(self.ms_file,
                                 index_before,
                                 spec_requested_filter_mode=self.best_frag_spec.filter_mode,
-                                absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/",
+                                absolute_spec_folder=os.path.join(self.kwargs["one_analysis_folder"], "spectra"),
                                 mass_deviation=self.kwargs["mass_deviation"],
                                 spec_save_matplotlib_plot=False,
                                 spec_save_go_plot=False,
@@ -361,7 +361,7 @@ class OneAnalysis:
         self.spec_after = class_Spec.Spec(self.ms_file,
                                index_after,
                                spec_requested_filter_mode=self.best_frag_spec.filter_mode,
-                               absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/",
+                               absolute_spec_folder=os.path.join(self.kwargs["one_analysis_folder"], "spectra"),
                                mass_deviation=self.kwargs["mass_deviation"],
                                spec_save_matplotlib_plot=False,
                                spec_save_go_plot=False,
@@ -399,7 +399,7 @@ class OneAnalysis:
         self.spec_before = class_Spec.Spec(self.ms_file,
                                 index_before,
                                 spec_requested_filter_mode=self.best_molecular_ion_spec.filter_mode,
-                                absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/",
+                                absolute_spec_folder=os.path.join(self.kwargs["one_analysis_folder"], "spectra"),
                                 mass_deviation=self.kwargs["mass_deviation"],
                                 spec_save_matplotlib_plot=False,
                                 spec_save_go_plot=False,
@@ -407,7 +407,7 @@ class OneAnalysis:
         self.spec_after = class_Spec.Spec(self.ms_file,
                                index_after,
                                spec_requested_filter_mode=self.best_molecular_ion_spec.filter_mode,
-                               absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/",
+                               absolute_spec_folder=os.path.join(self.kwargs["one_analysis_folder"], "spectra"),
                                mass_deviation=self.kwargs["mass_deviation"],
                                spec_save_matplotlib_plot=False,
                                spec_save_go_plot=False,
@@ -480,7 +480,7 @@ class OneAnalysis:
 
     def append_oa_summary_to_raw_file_summary(self, summary_list):
         self.make_oa_log_entry("INFO:\t" + "Appending summary to raw file summary. Summary list: " + str(summary_list))
-        with open(self.ms_file.parentfolder + "/" + "SUMMARY.txt", "a") as oa_summary:
+        with open(os.path.join(self.ms_file.parentfolder, "SUMMARY.txt"), "a") as oa_summary:
             for entry in summary_list:
                 oa_summary.write(str(entry) + "\t")
             oa_summary.write("\n")
@@ -561,7 +561,7 @@ class OneAnalysis:
         self.make_oa_log_entry("INFO:\t" + "Starting first prediction of molecular ion...")
 
         self.molecular_ion_prediction = class_Prediction.Prediction(self.ms_file, self.mass, best_molecular_ion_spec, spec_before=self.mi_spec_before, spec_after=self.mi_spec_after,
-                                                   absolute_pred_folder=self.kwargs["one_analysis_folder"] + "predictions/",
+                                                   absolute_pred_folder=os.path.join(self.kwargs["one_analysis_folder"], "predictions"),
                                                    pred_formula_cache_folder_path=self.kwargs["pred_formula_cache_folder_path"],
                                                    pred_save_matplotlib_plot_of_isotopologues=self.kwargs["oa_molecular_ion_pred_save_matplotlib_plot_of_isotopologues"],
                                                    pred_save_go_plot_of_isotopologues=self.kwargs["oa_molecular_ion_pred_save_go_plot_of_isotopologues"],
@@ -585,7 +585,7 @@ class OneAnalysis:
             spec_before = class_Spec.Spec(self.ms_file, 
                                self.peak_index - len(self.ms_file.available_modes), 
                                spec_requested_filter_mode=best_molecular_ion_spec.filter_mode, 
-                               absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/", 
+                               absolute_spec_folder=os.path.join(self.kwargs["one_analysis_folder"], "spectra"),
                                mass_deviation=self.kwargs["mass_deviation"],
                                spec_save_matplotlib_plot=self.kwargs["oa_molecular_ion_pred_before_spec_acquisition_save_matplotlib_plot"],
                                spec_save_go_plot=self.kwargs["oa_molecular_ion_pred_before_spec_acquisition_save_go_plot"],
@@ -600,7 +600,7 @@ class OneAnalysis:
             spec_after = class_Spec.Spec(self.ms_file, 
                               self.peak_index + len(self.ms_file.available_modes), 
                               spec_requested_filter_mode=best_molecular_ion_spec.filter_mode, 
-                              absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/", 
+                              absolute_spec_folder=os.path.join(self.kwargs["one_analysis_folder"], "spectra"),
                               mass_deviation=self.kwargs["mass_deviation"],
                               spec_save_matplotlib_plot=self.kwargs["oa_molecular_ion_pred_after_spec_acquisition_save_matplotlib_plot"],
                               spec_save_go_plot=self.kwargs["oa_molecular_ion_pred_after_spec_acquisition_save_go_plot"],
@@ -629,7 +629,7 @@ class OneAnalysis:
                     continue
             for curr_spec in available_specs:
                 class_Prediction.Prediction(self.ms_file, self.mass, curr_spec,
-                                    absolute_pred_folder=self.kwargs["one_analysis_folder"] + "predictions/",
+                                    absolute_pred_folder=os.path.join(self.kwargs["one_analysis_folder"], "predictions"),
                                     pred_formula_cache_folder_path=self.kwargs["pred_formula_cache_folder_path"],
                                     pred_save_matplotlib_plot_of_isotopologues=self.kwargs["oa_molecular_ion_pred_save_matplotlib_plot_of_isotopologues"],
                                     pred_save_go_plot_of_isotopologues=self.kwargs["oa_molecular_ion_pred_save_go_plot_of_isotopologues"],
@@ -639,7 +639,7 @@ class OneAnalysis:
                                     **additional_kwargs)
             self.make_oa_log_entry("INFO:\t" + "Old prediction did not match with the prediction of multiple spectra!")
             self.make_oa_log_entry("INFO:\t" + "Plots are created for every spectrum next to the original index. Plots will be available.")
-            with open(self.kwargs["one_analysis_folder"] + "predictions/BEST_FORMULA_" + str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.summarized_molecular_ion_formula_score_dict.keys())[0]).items()])) + ".txt", "a") as txt_file:
+            with open(os.path.join(self.kwargs["one_analysis_folder"], "predictions", "BEST_FORMULA_" + str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.summarized_molecular_ion_formula_score_dict.keys())[0]).items()])) + ".txt"), "a") as txt_file:
                 txt_file.write("Best prediction according to three spectra which are located next to the original peak: " + str(ast.literal_eval(list(self.summarized_molecular_ion_formula_score_dict.keys())[0])))
                 txt_file.write("\n")
                 log_summarized_molecular_ion_formula_score_dict = {float(dictkey) if isinstance(dictkey, np.float64) else dictkey : float(dictvalue) if isinstance(dictvalue, np.float64) else dictvalue for dictkey, dictvalue in self.summarized_molecular_ion_formula_score_dict.items()}
@@ -687,7 +687,7 @@ class OneAnalysis:
         self.make_oa_log_entry("INFO:\t" + "Molecular Ion Prediction finished. \nBest formula prediction: " + str(self.best_molecular_ion_prediction) + " single score: " + str(self.score_of_best_molecular_ion_prediction))
         return self.molecular_ion_prediction
     
-    def get_formula_score_dict_with_multiple_specs(self, specs, mass, return_if_no_peak_found=True, absolute_pred_subfolder_path="predictions/"):
+    def get_formula_score_dict_with_multiple_specs(self, specs, mass, return_if_no_peak_found=True, absolute_pred_subfolder_path="predictions"):
         self.make_oa_log_entry("INFO:\t" + "Starting prediction with multiple specs...")
         predictions = []
         for spec in specs:
@@ -702,7 +702,7 @@ class OneAnalysis:
                         continue
                 self.make_oa_log_entry("INFO:\t" + "Starting prediction just now.")
                 pred = class_Prediction.Prediction(self.ms_file, mass, spec,
-                                  absolute_pred_folder=self.kwargs["one_analysis_folder"] + absolute_pred_subfolder_path,
+                                  absolute_pred_folder=os.path.join(self.kwargs["one_analysis_folder"], absolute_pred_subfolder_path),
                                   pred_formula_cache_folder_path=self.kwargs["pred_formula_cache_folder_path"],
                                   pred_save_matplotlib_plot_of_isotopologues=self.kwargs["oa_multiplespec_pred_save_matplotlib_plot_of_isotopologues"],
                                   pred_save_go_plot_of_isotopologues=self.kwargs["oa_multiplespec_pred_save_go_plot_of_isotopologues"],
@@ -761,7 +761,7 @@ class OneAnalysis:
                 spec_before = class_Spec.Spec(self.ms_file, 
                                    self.peak_index - len(self.ms_file.available_modes), 
                                    spec_requested_filter_mode=self.best_frag_spec.filter_mode, 
-                                   absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/", 
+                                   absolute_spec_folder=os.path.join(self.kwargs["one_analysis_folder"], "spectra"), 
                                    mass_deviation=self.kwargs["mass_deviation"],
                                    spec_save_matplotlib_plot=self.kwargs["oa_fragments_spec_save_matplotlib_plot"],
                                    spec_save_go_plot=self.kwargs["oa_fragments_spec_save_go_plot"],
@@ -776,7 +776,7 @@ class OneAnalysis:
                 spec_after = class_Spec.Spec(self.ms_file, 
                                   self.peak_index + len(self.ms_file.available_modes), 
                                   spec_requested_filter_mode=self.best_frag_spec.filter_mode, 
-                                  absolute_spec_folder=self.kwargs["one_analysis_folder"] + "spectra/", 
+                                  absolute_spec_folder=os.path.join(self.kwargs["one_analysis_folder"], "spectra"), 
                                   mass_deviation=self.kwargs["mass_deviation"],
                                   spec_save_matplotlib_plot=self.kwargs["oa_fragments_spec_save_matplotlib_plot"],
                                   spec_save_go_plot=self.kwargs["oa_fragments_spec_save_go_plot"],
@@ -808,7 +808,7 @@ class OneAnalysis:
 
             try:
                 if self.kwargs["oa_fragments_do_good_peak_comparison_with_area_between_curves"]:
-                    os.makedirs(self.kwargs["one_analysis_folder"] + "predictions/fragments/peak_matching/", exist_ok=True)
+                    os.makedirs(os.path.join(self.kwargs["one_analysis_folder"], "predictions", "fragments", "peak_matching"), exist_ok=True)
                     fragment_xic = MS_functions.get_xic(self.ms_file.rawdata, frag_mass, round(((self.kwargs["mass_deviation"]*self.mass) / 1000000), 4), requested_filter_mode=self.best_frag_spec.filter_mode)
 
                     print("Fragment mass:   " + str(frag_mass))
@@ -842,12 +842,12 @@ class OneAnalysis:
                         print("No good fragment peak shape was detected. Continuing with the next fragment...")
                         self.make_oa_log_entry("INFO:\t" + "Fragment peak with mass: " + str(frag_mass) + "  -> Does not have a good fragment peak shape. Area between curves too high: " + str(area_between_curves) + " Continuing....")
                         title = "Peak matching evaluation" + str(round(self.mass, 4)) + " / " + str(round(frag_mass, 4))
-                        save_filepath = self.kwargs["one_analysis_folder"]  + "predictions/fragments/peak_matching/" + "FALSE_Fragmass_" + str(round(frag_mass, 4)) + ".png"
+                        save_filepath = os.path.join(self.kwargs["one_analysis_folder"], "predictions", "fragments", "peak_matching", "FALSE_Fragmass_" + str(round(frag_mass, 4)) + ".png")
                         plotting.create_xic_matching_plot(peak1_rt, peakintensity1, peak2_rt, peakintensity2, title, area_between_curves, save_filepath)
                         continue
                     else:
                         title = "Peak matching evaluation" + str(round(self.mass, 4)) + " / " + str(round(frag_mass, 4))
-                        save_filepath = self.kwargs["one_analysis_folder"] + "predictions/fragments/peak_matching/" + "TRUE_Fragmass_" + str(round(frag_mass, 4)) + ".png"
+                        save_filepath = os.path.join(self.kwargs["one_analysis_folder"], "predictions", "fragments", "peak_matching", "TRUE_Fragmass_" + str(round(frag_mass, 4)) + ".png")
                         plotting.create_xic_matching_plot(peak1_rt, peakintensity1, peak2_rt, peakintensity2, title, area_between_curves, save_filepath)
             except Exception as e:
                 print("Error in making peak matching plot in get_fragment_predictions!" + str(e))
@@ -864,7 +864,7 @@ class OneAnalysis:
                         continue
 
                 curr_prediction = class_Prediction.Prediction(self.ms_file, frag_mass, self.best_frag_spec, spec_before=self.frag_spec_before, spec_after=self.frag_spec_after,
-                                                                  absolute_pred_folder=self.kwargs["one_analysis_folder"] + "predictions/fragments/",
+                                                                  absolute_pred_folder=os.path.join(self.kwargs["one_analysis_folder"], "predictions", "fragments"),
                                                                   pred_formula_cache_folder_path=self.kwargs["pred_formula_cache_folder_path"],
                                                                   pred_save_matplotlib_plot_of_isotopologues=self.kwargs["oa_fragments_pred_save_matplotlib_plot_of_isotopologues"],
                                                                   pred_save_go_plot_of_isotopologues=self.kwargs["oa_fragments_pred_save_go_plot_of_isotopologues"],

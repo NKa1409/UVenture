@@ -84,6 +84,8 @@ def get_window_size_by_frequency(intensityvals, timevals, min_width=3, max_width
             idxs = np.where(xf >= 0)
             freqs = xf[idxs]
             mags = np.abs(yf[idxs])
+            if len(mags) < 6:
+                continue
             dom_freqs.append(freqs[np.argmax(mags[4:])])
     if len(dom_freqs) > 0:
         #print("dom_freqs: " + str(dom_freqs))

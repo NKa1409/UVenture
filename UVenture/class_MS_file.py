@@ -19,10 +19,12 @@ class MS_File:
             print("No filename provided. Cannot read MS file. Returning...")
             return
         else:
-            if "parentfolder_msfile" in kwargs: parentfolder = kwargs["parentfolder_msfile"]
-            else: parentfolder = str(".".join(filename.split(".")[:-1]) + "/")
+            if "parentfolder_msfile" in kwargs: 
+                parentfolder = kwargs["parentfolder_msfile"]
+            else: 
+                parentfolder = os.path.normpath( str(".".join(filename.split(".")[:-1])))
             default_kwargs = {"parentfolder_msfile": parentfolder,
-                              "logfile_filepath": parentfolder + "MSfile_logfile.txt",
+                              "logfile_filepath": os.path.join(parentfolder, "MSfile_logfile.txt"),
                               "msfile_raw_file_retention_time_unit": "sec"}
             self.kwargs = {**default_kwargs, **kwargs}
             os.makedirs(self.kwargs["parentfolder_msfile"], exist_ok=True)
@@ -102,9 +104,10 @@ class MS_File:
             if self.debug_output: print("Starting to bg substract the data...")
             starttime = datetime.datetime.now()
             if self.get_2d_spec:
-                save_filename = self.parentfolder + "/2Dspec.tiff"
+                save_filename = os.path.join(self.parentfolder, "2Dspec.tiff")
+                os.makedirs(os.path.dirname(save_filename), exist_ok=True)
                 if not os.path.exists(save_filename):
-                    plotting.create_2d_massspec_plot(ms_file_object=self, filter_mode="Full scan", save=self.parentfolder + "/2Dspec.tiff", max_dim=5000)
+                    plotting.create_2d_massspec_plot(ms_file_object=self, filter_mode="Full scan", save=save_filename, max_dim=5000)
                     self.save_ms_file_log_entry("INFO:\t" + "2D spectrum saved to: " + str(save_filename))
             if self.do_bckg_subtraction:
                 if self.debug_output: print("Doing background subtraction...")
