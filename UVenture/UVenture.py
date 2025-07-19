@@ -307,17 +307,40 @@ class OneAnalysis:
             rt_window, int_window = xic[0][peak_index-index_window:peak_index+index_window], xic[1][peak_index-index_window:peak_index+index_window]
             print(rt_window)
             print(int_window)
-            int_window_smooth = scipy.signal.savgol_filter(int_window, 5, 3)
-            peaks = [i for i in range(1, len(int_window_smooth) - 1) if int_window_smooth[i] > int_window_smooth[i - 1] and int_window_smooth[i] > int_window_smooth[i + 1]]
-            if len(peaks) >= 2:
-                index_in_peaklist = peaks.index(min(peaks, key=lambda x: abs( int( len(int_window_smooth) /2) - x )))
-                index_of_peak = peaks[index_in_peaklist]
-            elif len(peaks) == 1:
-                index_of_peak = peaks[0]
+            peak_avg_int_dict = {}
+            for i in range(len(int_window)):
+                try:
+                    tripple_summed_int = int_window[i-1] + int_window[i] + int_window[i+1]
+                except IndexError:
+                    continue
+                peak_avg_int_dict[rt_window[i]] = tripple_summed_int
+            avg_peak_maximum_rt = max(peak_avg_int_dict, key=peak_avg_int_dict.get)
+            avg_peak_maximum_index = rt_window.index(avg_peak_maximum_rt)
+            avg_ints = [peak_avg_int_dict[i] for i in peak_avg_int_dict.keys()]
+            avg_rts = [i for i in peak_avg_int_dict.keys()]
+
+            try:
+                smooth_intensities = scipy.signal.savgol_filter(avg_ints, int(len(avg_ints) / 5), 2)
+            except Exception as e:
+                print("Error while smoothing intensities: " + str(e))
+                print(traceback.format_exc())
+                smooth_intensities = list(peak_avg_int_dict.values())
+            new_indices_of_identified_peaks = [i for i in range(1, len(smooth_intensities) - 1) if smooth_intensities[i - 1] < smooth_intensities[i] > smooth_intensities[i + 1]]
+            if len(new_indices_of_identified_peaks) >= 2:
+                peak_index_in_smooth = min(new_indices_of_identified_peaks, key=lambda x: abs(peak_index - x))
+            new_rt = avg_rts[peak_index_in_smooth]
+            if new_rt == avg_peak_maximum_rt:
+                print("Peak was adjusted to the average peak maximum retention time: " + str(new_rt))
+                print("It is likely a good adjustment.")
+                return new_rt
             else:
-                index_of_peak = peak_index
-            peak_maximum_rt = rt_window[index_of_peak]
-            return peak_maximum_rt
+                print("Peak was adjusted to the average peak maximum retention time: " + str(new_rt))
+                print("It is likely not a good adjustment as multiple peaks were found in the observation window.")
+                print("Adjusted the peak retention time to the identified peak that is closest to the original peak index.")
+                print("Original peak retention time: " + str(original_rt))
+                print("Adjusted peak retention time: " + str(new_rt))
+                return new_rt
+
         except:
             return original_rt
 

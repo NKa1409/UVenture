@@ -36,9 +36,9 @@ class Prediction:
         print("Starting prediction class")
         
         if "prediction_subfolder" in kwargs:
-            pred_folder = self.ms_file.parentfolder + "/predictions/" + kwargs["prediction_subfolder"]
+            pred_folder = os.path.join(self.ms_file.parentfolder, "predictions", kwargs["prediction_subfolder"])
         else:
-            pred_folder = str(self.ms_file.parentfolder + "/predictions/" + str(self.spec.index) + "_" + str(round(self.mass, 4)) + "/")
+            pred_folder = os.path.join(self.ms_file.parentfolder, "predictions", str(self.spec.index) + "_" + str(round(self.mass, 4)))
         if "absolute_pred_folder" in kwargs:
             pred_folder = kwargs["absolute_pred_folder"]
         if "prediction_subfolder" in kwargs and "absolute_pred_folder" in kwargs:
@@ -47,7 +47,7 @@ class Prediction:
             print(kwargs["absolute_pred_folder"])
         
         default_kwargs = {"pred_folder":pred_folder,  
-                          "pred_log_filepath": pred_folder + "prediction_log_for_mass_" + str(round(self.mass, 4)) + ".txt",
+                          "pred_log_filepath": os.path.join(pred_folder, "prediction_log_for_mass_" + str(round(self.mass, 4)) + ".txt"),
                           "pred_save_matplotlib_plot_of_isotopologues":False,
                           "pred_save_go_plot_of_isotopologues":False,
                           "pred_save_xic_plot":False,
@@ -196,7 +196,7 @@ class Prediction:
         # If the user wants to save the XIC plot, create it and save it
         if self.kwargs["pred_save_xic_plot"] == True:
             self.make_op_log_entry("INFO:\t" + "Start saving XIC plot...")
-            self.xic_plot_filepath = self.kwargs["pred_folder"] + "xic_" + str(round(self.mass, 4)) + "+-" + str(self.kwargs["mass_deviation"]) + "_" + str( self.spec.filter_mode) + ".png"
+            self.xic_plot_filepath = os.path.join(self.kwargs["pred_folder"], "xic_" + str(round(self.mass, 4)) + "+-" + str(self.kwargs["mass_deviation"]) + "_" + str(self.spec.filter_mode) + ".png")
             title = "XIC for mass: " + str(round(self.mass, 4)) + " at RT: " + str(round(self.spec.rt, 2)) + " seconds\nFilter mode: " + str(self.spec.filter_mode)
             plotting.create_xic(self.xic[0], self.xic[1], title, self.xic_plot_filepath, retention_time=self.spec.rt)
             self.make_op_log_entry("INFO:\t" + "Finished saving XIC plot...")
@@ -204,14 +204,14 @@ class Prediction:
         # If the user wants to save the matplotlib plot of isotopologues, create it and save it
         if self.kwargs["pred_save_matplotlib_plot_of_isotopologues"] == True and len(list(self.formula_score_dict.keys())) > 0:
             self.make_op_log_entry("INFO:\t" + "Start saving matplotlib plot of isotopologues...")
-            self.matplotlib_plot_filepath = self.kwargs["pred_folder"] + "isotopo_matplotlib_plot_" + str(round(self.mass, 4)) + "_" + str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.formula_score_dict.keys())[0]).items()])) + ".png"
+            self.matplotlib_plot_filepath = os.path.join(self.kwargs["pred_folder"], "isotopo_matplotlib_plot_" + str(round(self.mass, 4)) + "_" + str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.formula_score_dict.keys())[0]).items()])) + ".png")
             plotting.create_isotopo_plot(self.spec.summarized_masses, self.spec.summarized_intensities, ast.literal_eval(list(self.formula_score_dict.keys())[0]), self.matplotlib_plot_filepath)
             self.make_op_log_entry("INFO:\t" + "Finished saving matplotlib plot of isotopologues...")
         
         # If the user wants to save the go plot of isotopologues, create it and save it
         if self.kwargs["pred_save_go_plot_of_isotopologues"] == True and len(list(self.formula_score_dict.keys())) > 0:
             self.make_op_log_entry("INFO:\t" + "Start saving go plot of isotopologues...")
-            self.go_plot_filepath = self.kwargs["pred_folder"] + "isotopo_go_plot_" + str(round(self.mass, 4)) + "_" + str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.formula_score_dict.keys())[0]).items()])) + ".html"
+            self.go_plot_filepath = os.path.join(self.kwargs["pred_folder"], "isotopo_go_plot_" + str(round(self.mass, 4)) + "_" + str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.formula_score_dict.keys())[0]).items()])) + ".html")
             plotting.create_isotopo_plot_with_go(self.spec.summarized_masses, self.spec.summarized_intensities, ast.literal_eval(list(self.formula_score_dict.keys())[0]), self.go_plot_filepath, mass_deviation=self.kwargs["mass_deviation"])
             self.make_op_log_entry("INFO:\t" + "Finished saving go plot of isotopologues...")
         

@@ -86,10 +86,10 @@ class Webpage:
         self.parentfolder = resource_path("webserver_save/") # Returns: C://Users/username/project/webserver_save
         print("Parent folder: " + self.parentfolder)
         os.makedirs(self.parentfolder, exist_ok=True)
-        self.mzml_folder = resource_path(self.parentfolder + "mzml_files/")
+        self.mzml_folder = os.path.join(self.parentfolder, "mzml_files")
         print("mzML folder: " + self.mzml_folder)
         os.makedirs(self.mzml_folder, exist_ok=True)
-        self.results_folder = resource_path(self.parentfolder + "results/")
+        self.results_folder = os.path.join(self.parentfolder, "results")
         print("Results folder: " + self.results_folder)
         os.makedirs(self.results_folder, exist_ok=True)
         self.app = flask.Flask(__name__)
@@ -393,7 +393,7 @@ class Webpage:
                     print("First file selected")
                     calc_new_file = True
                 if calc_new_file:
-                    ms_filepath = self.mzml_folder + file_select
+                    ms_filepath = os.path.join(self.mzml_folder, file_select)
                     self.curr_ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=os.path.join(self.results_folder, str(".".join(file_select.split(".")[:-1]))))
                 print("MS file loaded")
                 if calc_new_file == False and (xic_mass in list(self.curr_xic_encoded_plot.keys())) and (mass_deviation == self.curr_mass_deviation):
@@ -588,6 +588,8 @@ class Webpage:
                 return flask.redirect("/file_browser")
             # Get the last part of the folder path
             folder = folder.replace(resource_path(""), "")
+            if folder.startswith("/") or folder.startswith("\\"): folder = folder[1:]  # Remove leading slash if present
+            if folder.startswith("//") or folder.startswith("\\\\"): folder = folder[2:]  # Remove leading double slashes if present
             upper_folder = "->".join(folder.replace("\\\\", "->").replace("\\", "->").replace("/", "->").split("->")[:-1])
             print(upper_folder)
             # Check if folder is a file or a directory
@@ -624,10 +626,14 @@ class Webpage:
             subfolders = []
             # Get the last part of the folder path
             folder = folder.replace(resource_path(""), "")
+            if folder.startswith("/") or folder.startswith("\\"): folder = folder[1:]  # Remove leading slash if present
+            if folder.startswith("//") or folder.startswith("\\\\"): folder = folder[2:]  # Remove leading double slashes if present
+            print("Current folder: " + str(folder))
             upper_folder = "->".join(folder.replace("\\\\", "->").replace("\\", "->").replace("/", "->").split("->")[:-1])
             print(upper_folder)
             # Check if folder is a file or a directory
             folder = resource_path(folder)
+            print(folder)
             if os.path.isfile(folder):
                 # Serve the file directly as a download
                 filename = os.path.basename(folder)
@@ -652,6 +658,7 @@ class Webpage:
                 # Get the contents of the folder
                 contents = []
                 subfolders = []
+                print("Listing contents of folder: " + str(folder))
                 for item in os.listdir(folder):
                     full_path = os.path.join(folder, item)
                     if os.path.isdir(full_path):

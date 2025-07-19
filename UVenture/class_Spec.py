@@ -18,9 +18,9 @@ class Spec:
         self.index = self.search_for_required_spec_close_to_rt(index, requested_mode=requested_mode, requested_ms_ms_mass=requested_ms_ms_mass)
 
         if "spec_subfolder" in kwargs:
-            spec_folder = self.ms_file.parentfolder + "/spectra/" + kwargs["spec_subfolder"]
+            spec_folder = os.path.join(self.ms_file.parentfolder, "spectra", kwargs["spec_subfolder"])
         else:
-            spec_folder = str(self.ms_file.parentfolder + "/spectra/" + "massspec_requestIndex_" + str(self.index) + "/")
+            spec_folder = os.path.join(self.ms_file.parentfolder, "spectra", "massspec_requestIndex_" + str(self.index))
         if "absolute_spec_folder" in kwargs:
             spec_folder = kwargs["absolute_spec_folder"]
         if "spec_subfolder" in kwargs and "absolute_spec_folder" in kwargs:
@@ -41,7 +41,7 @@ class Spec:
         default_kwargs = {"spec_folder":spec_folder,
                           "spec_requested_filter_mode":requested_mode,
                           "spec_requested_ms_ms_mass":requested_ms_ms_mass,
-                          "spec_log_filepath":spec_folder + "spectrum_creation_log_" + str(self.index) + ".txt",
+                          "spec_log_filepath":os.path.join(spec_folder, "spectrum_creation_log_" + str(self.index) + ".txt"),
                           "mass_deviation": 11,
 
                           "spec_save_matplotlib_plot":False,
@@ -76,14 +76,14 @@ class Spec:
 
         # Create a mass spectrum plot using go
         if self.kwargs["spec_save_go_plot"] == True:
-            plot_filepath = self.kwargs["spec_folder"] + "Mass_spectrum_index" + str(self.index) + "_" + str(self.filter_mode.replace("/", "")) + "_" + str(self.ms_ms_masses) + ".html"
+            plot_filepath = os.path.join(self.kwargs["spec_folder"], "Mass_spectrum_index" + str(self.index) + "_" + str(self.filter_mode.replace("/", "")) + "_" + str(self.ms_ms_masses) + ".html")
             self.create_barchart_massspec_with_go(self.summarized_masses, self.summarized_intensities, plot_filepath=plot_filepath)
 
         # Create a mass spectrum plot using matplotlib
         if self.kwargs["spec_save_matplotlib_plot"] == True:
             self.make_spec_log_entry("INFO:\t" + "Saving mass spectrum plot...")
             title = "Mode:" + str(self.filter_mode) + "; Index: " + str(self.index) + "; RT: " + str(round(self.ms_file.rt_list[self.index], 2)) + ";\nFilter: " + str(filter)
-            image_filepath = self.kwargs["spec_folder"] + "Mass_spectrum_index" + str(self.index) + "_" + str(self.filter_mode.replace("/", "")) + ".png"
+            image_filepath = os.path.join(self.kwargs["spec_folder"], "Mass_spectrum_index" + str(self.index) + "_" + str(self.filter_mode.replace("/", "")) + ".png")
             plotting.create_barchart_massspec(self.summarized_masses, self.summarized_intensities, title=title, image_filepath=image_filepath)
 
         self.make_spec_log_entry("INFO:\t" + "Found MS/MS masses: " + str(self.ms_ms_masses))
