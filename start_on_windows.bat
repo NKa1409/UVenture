@@ -108,16 +108,16 @@ echo.
 echo If enabled, long paths (up to ~32,767 characters) can be used in
 echo applications that support them (like Python 3.6+).
 echo.
-echo Current setting: %REGVAL% = %CURRENT%
+echo Current setting %REGVAL%=%CURRENT%
 
-if "%CURRENT%"=="1" (
+IF "%CURRENT%"=="0x1" (
     echo Long paths are already ENABLED.
     echo No action is needed.
-) else (
+) ELSE (
     echo Long paths are currently DISABLED.
     :: Ask user if they want to enable it
     echo.
-    set /p USERCHOICE=Do you want to enable long path support now? (Y/N): 
+    set /p USERCHOICE=Do you want to enable long path support now? (Y/N)  
     if /i "%USERCHOICE%"=="Y" (
         echo Enabling long path support...
         reg add "%REGKEY%" /v %REGVAL% /t REG_DWORD /d 1 /f >nul
@@ -156,7 +156,7 @@ REM Now use "%PYTHON_EXEC%" instead of "python" for venv, pip, running scripts, 
 
 echo.
 echo ====================================================================
-echo  Create & check virtual environment
+echo  Create and check virtual environment
 echo ====================================================================
 
 
