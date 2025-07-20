@@ -111,27 +111,51 @@ echo.
 echo Current setting %REGVAL%=%CURRENT%
 
 IF "%CURRENT%"=="0x1" (
-    echo Long paths are already ENABLED.
+    echo Path length limit is already disabled.
     echo No action is needed.
 ) ELSE (
-    echo Long paths are currently DISABLED.
-    :: Ask user if they want to enable it
+    echo Path length limit is currently enabled.
+    :: Ask user if they want to disable it
     echo.
-    set /p USERCHOICE=Do you want to enable long path support now? (Y/N)  
-    if /i "%USERCHOICE%"=="Y" (
-        echo Enabling long path support...
-        reg add "%REGKEY%" /v %REGVAL% /t REG_DWORD /d 1 /f >nul
-        if %errorlevel% EQU 0 (
-            echo Long path support enabled successfully.
-        ) else (
-            echo Failed to update the registry.
-        )
-    ) else (
-        echo No changes were made.
+    set /p USERCHOICE="Do you want to disable the path length limit now? (Yes/No): " 
+    if "!USERCHOICE!" == "Y" goto :confirmed
+    if "!USERCHOICE!" == "YES" goto :confirmed
+    if "!USERCHOICE!" == "y" goto :confirmed
+    if "!USERCHOICE!" == "yes" goto :confirmed
+    if "!USERCHOICE!" == "Yes" goto :confirmed
+    if "!USERCHOICE!" == "Ja" goto :confirmed
+    if "!USERCHOICE!" == "J" goto :confirmed
+    if "!USERCHOICE!" == "j" goto :confirmed
+
+    
+    
+    :denied
+    echo No changes were made.
+    goto :check_python_version
+
+    :confirmed
+    :: Check for admin rights
+    net session >nul 2>&1
+    IF %ERRORLEVEL% NEQ 0 (
+        echo.
+        echo [WARNING] You are not running this script with administrator privileges.
+        echo You need admin privileges to change the path length limit!
+        powershell -Command "Start-Process '%~f0' -Verb RunAs"
+        exit /b
+        echo.
     )
+    echo Enabling long path support...
+    reg add "%REGKEY%" /v %REGVAL% /t REG_DWORD /d 1 /f >nul
+    if %errorlevel% EQU 0 (
+        echo Long path support enabled successfully.
+    ) else (
+        echo Failed to update the registry.
+    )
+    
 )
 
 
+:check_python_version
 echo.
 echo ====================================================================
 echo  Checking Python version
