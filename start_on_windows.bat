@@ -3,17 +3,6 @@ SETLOCAL ENABLEDELAYEDEXPANSION
 cd /d "%~dp0"
 
 
-:: Check for admin rights
-net session >nul 2>&1
-IF %ERRORLEVEL% NEQ 0 (
-    echo.
-    echo [WARNING] You are not running this script with administrator privileges.
-    echo If Python installation fails or the app does not start correctly,
-    echo try running this script again as administrator.
-    echo.
-)
-
-
 echo.
 echo ====================================================================
 echo  Searching for existing Python installation
@@ -56,12 +45,13 @@ echo ====================================================================
 :: 4. Not found — install Python now
 echo Could not locate any version of Python on your system. Downloading the installer for Python 3.12.2.
 echo Please wait while the installer file is being downloaded...
-echo .
+echo Please wait...
+echo.
 set "PYTHON_INSTALLER=python-installer.exe"
 powershell -Command "Invoke-WebRequest -Uri https://www.python.org/ftp/python/3.12.2/python-3.12.2-amd64.exe -OutFile '%PYTHON_INSTALLER%'"
-echo .
+echo.
 echo Python installer downloaded successfully!
-echo .
+echo.
 :: Get path to current script directory
 set "SCRIPT_DIR=%~dp0"
 :: Set Python install directory to a subfolder "python312" inside the script's directory
@@ -69,10 +59,14 @@ set "PYTHON_TARGET=%SCRIPT_DIR%python312"
 :: Ensure the folder exists
 mkdir "%PYTHON_TARGET%"
 echo Python installer will be started in the next step.
-echo Please use the predefined location for the installation. Python will be installed in the UVenture project folder. 
-echo .
-echo [IMPORTANT] When the installation is finished, please disable the path length limit. Otherwise the program will not work properly!
-echo .
+echo Please leave everything at the default values. You do not need to add Python to PATH or make any other changes. Python will be installed in the UVenture project folder. 
+echo.
+echo.
+echo "Please simply click 'Install now' in the installation wizzard."
+echo When the installation is finished, please disable the path length limit. Otherwise the program will not work properly!
+echo.
+set /p DUMMY="Press ENTER to start the Installation wizzard."
+echo.
 start /wait "" "%PYTHON_INSTALLER%" InstallAllUsers=0 PrependPath=0 Include_test=0 TargetDir="%PYTHON_TARGET%"
 del "%PYTHON_INSTALLER%"
 
@@ -117,7 +111,7 @@ IF "%CURRENT%"=="0x1" (
     echo Path length limit is currently enabled.
     :: Ask user if they want to disable it
     echo.
-    set /p USERCHOICE="Do you want to disable the path length limit now? (Yes/No): " 
+    set /p USERCHOICE="Do you want to disable the path length limit now? (|Yes|/No): " 
     if "!USERCHOICE!" == "Y" goto :confirmed
     if "!USERCHOICE!" == "YES" goto :confirmed
     if "!USERCHOICE!" == "y" goto :confirmed
