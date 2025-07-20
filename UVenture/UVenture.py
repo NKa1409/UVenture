@@ -521,6 +521,8 @@ class OneAnalysis:
         molecular_ion_score = self.score_of_best_molecular_ion_prediction
         molecular_ion_intensity = self.intensity_of_molecular_ion
         molecular_ion_formula_score_dict = self.summarized_molecular_ion_formula_score_dict # {"{"C": 1, "H": 2, ....}": score, "{}": score2}
+        self.make_oa_log_entry("INFO:\t" + "Molecular ion formula score dict: " + str(molecular_ion_formula_score_dict))
+        self.make_oa_log_entry("INFO:\t" + "Fragment ion formula score dict: " + str(self.fragment_predictions_formula_score_dicts))
         mi_list = [molecular_ion_mass, molecular_ion_best_approx_dict, molecular_ion_score, molecular_ion_intensity, molecular_ion_formula_score_dict]
         true_fragment_list.append(mi_list)
         print("Molecular ion list: " + str(mi_list))
@@ -548,6 +550,7 @@ class OneAnalysis:
                         print(molecular_ion_pred_dict)
                         if (self.combine_and_sum_dicts(nl_formula_dict, f_formula_dict) == molecular_ion_pred_dict):
                             print("TRUETRUETRUEskjaskjhlgfaivwzbevwuief")
+                            self.make_oa_log_entry("INFO:\t" + "Found matching fragment: " + str(f_formula_dict))
                             true_fragment_list.append([f_mass, f_formula_dict, f_score, f_intensity, neutral_loss_mass, nl_formula_dict, nl_deviation])
                             mi_formula_str = "".join([str(a) + str(n) for a, n in molecular_ion_pred_dict.items()])
                             f_formula_str = "".join([str(a) + str(n) for a, n in f_formula_dict.items()])
