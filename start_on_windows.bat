@@ -126,6 +126,7 @@ IF "%CURRENT%"=="0x1" (
     if "!USERCHOICE!" == "Ja" goto :confirmed
     if "!USERCHOICE!" == "J" goto :confirmed
     if "!USERCHOICE!" == "j" goto :confirmed
+    if "!USERCHOICE!" == "" goto :confirmed
 
     
     
