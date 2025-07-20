@@ -1006,7 +1006,7 @@ class Webpage:
     def start_one_oa(self, ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
         mz = float(mz)
         rt = float(rt)
-        thread_name = ("UVenture_OA_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_MZ_" + str(mz) + "_RT_" + str(rt) + "_FILE_" + str(ms_filepath.split("/")[-1]))
+        thread_name = ("UVenture_OA_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_MZ_" + str(mz) + "_RT_" + str(rt) + "_FILE_" + str( os.path.basename(ms_filepath) ) )
         print("Starting new process: " + thread_name)
         proc = multiprocessing.Process(target=caller_func, args=[ms_filepath, mz, rt, settings_dict, parentfolder_msfile], name=thread_name)
         print("Process created: " + str(proc))
