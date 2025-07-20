@@ -13,6 +13,12 @@ IF %ERRORLEVEL% NEQ 0 (
     echo.
 )
 
+
+echo.
+echo ====================================================================
+echo  Searching for existing Python installation
+echo ====================================================================
+
 :: === Find or install Python ===
 SET "PYTHON_EXEC="
 
@@ -42,26 +48,94 @@ FOR %%P IN ("%LocalAppData%\Programs\Python\Python3*\python.exe") DO (
     )
 )
 
+echo.
+echo ====================================================================
+echo  Python not found. Installing Python 3.12.2
+echo ====================================================================
+
 :: 4. Not found — install Python now
 echo Could not locate any version of Python on your system. Downloading the installer for Python 3.12.2.
-echo This will not affect system-wide Python installations.
-echo Please wait while the file downloads and installs Python...
+echo Please wait while the installer file is being downloaded...
+echo .
 set "PYTHON_INSTALLER=python-installer.exe"
 powershell -Command "Invoke-WebRequest -Uri https://www.python.org/ftp/python/3.12.2/python-3.12.2-amd64.exe -OutFile '%PYTHON_INSTALLER%'"
+echo .
+echo Python installer downloaded successfully!
+echo .
 :: Get path to current script directory
 set "SCRIPT_DIR=%~dp0"
 :: Set Python install directory to a subfolder "python312" inside the script's directory
 set "PYTHON_TARGET=%SCRIPT_DIR%python312"
 :: Ensure the folder exists
 mkdir "%PYTHON_TARGET%"
-start /wait "" "%PYTHON_INSTALLER%" /quiet InstallAllUsers=0 PrependPath=0 Include_test=0 TargetDir="%PYTHON_TARGET%"
+echo Python installer will be started in the next step.
+echo Please use the predefined location for the installation. Python will be installed in the UVenture project folder. 
+echo .
+echo [IMPORTANT] When the installation is finished, please disable the path length limit. Otherwise the program will not work properly!
+echo .
+start /wait "" "%PYTHON_INSTALLER%" InstallAllUsers=0 PrependPath=0 Include_test=0 TargetDir="%PYTHON_TARGET%"
 del "%PYTHON_INSTALLER%"
-
 
 SET "PYTHON_EXEC=%PYTHON_TARGET%\python.exe"
 
 :found_python
 echo Using Python at: %PYTHON_EXEC%
+
+
+:: Registry path and key
+set "REGKEY=HKLM\SYSTEM\CurrentControlSet\Control\FileSystem"
+set "REGVAL=LongPathsEnabled"
+
+:: Check current value
+reg query "%REGKEY%" /v %REGVAL% >nul 2>&1
+if %errorlevel% NEQ 0 (
+    echo.
+    echo ERROR: Could not find registry key for the path length limit. Are you on Windows 10/11 or newer?   
+)
+
+for /f "tokens=3" %%A in ('reg query "%REGKEY%" /v %REGVAL% ^| findstr %REGVAL%') do (
+    set CURRENT=%%A
+)
+
+echo.
+echo ====================================================================
+echo  Windows Path Length Limit
+echo ====================================================================
+echo By default, Windows limits the maximum path length to 260 characters.
+echo This can cause issues in development environments or when working
+echo with deeply nested directories.
+echo.
+echo If enabled, long paths (up to ~32,767 characters) can be used in
+echo applications that support them (like Python 3.6+).
+echo.
+echo Current setting: %REGVAL% = %CURRENT%
+
+if "%CURRENT%"=="1" (
+    echo Long paths are already ENABLED.
+    echo No action is needed.
+) else (
+    echo Long paths are currently DISABLED.
+    :: Ask user if they want to enable it
+    echo.
+    set /p USERCHOICE=Do you want to enable long path support now? (Y/N): 
+    if /i "%USERCHOICE%"=="Y" (
+        echo Enabling long path support...
+        reg add "%REGKEY%" /v %REGVAL% /t REG_DWORD /d 1 /f >nul
+        if %errorlevel% EQU 0 (
+            echo Long path support enabled successfully.
+        ) else (
+            echo Failed to update the registry.
+        )
+    ) else (
+        echo No changes were made.
+    )
+)
+
+
+echo.
+echo ====================================================================
+echo  Checking Python version
+echo ====================================================================
 
 :: Check if Python is version 3.12.2 or higher
 FOR /F "tokens=2 delims=." %%A IN ('"%PYTHON_EXEC%" --version 2^>nul') DO (
@@ -79,6 +153,11 @@ FOR /F "tokens=2 delims=." %%A IN ('"%PYTHON_EXEC%" --version 2^>nul') DO (
 
 
 REM Now use "%PYTHON_EXEC%" instead of "python" for venv, pip, running scripts, etc.
+
+echo.
+echo ====================================================================
+echo  Create & check virtual environment
+echo ====================================================================
 
 
 REM === Validate or recreate venv ===
@@ -106,6 +185,11 @@ IF NOT EXIST "%VENV_DIR%\Scripts\activate.bat" (
 REM === Activate venv ===
 call "%VENV_DIR%\Scripts\activate.bat"
 
+echo.
+echo ====================================================================
+echo  Install packages
+echo ====================================================================
+
 REM === Install packages if needed ===
 IF EXIST requirements.txt (
     echo Checking for required packages...
@@ -120,6 +204,12 @@ IF EXIST requirements.txt (
     )
     del tmp_check.txt
 )
+
+
+echo.
+echo ====================================================================
+echo  Start UVenture
+echo ====================================================================
 
 echo Running UVenture_web.py...
 start "" /B python UVenture_web.py
