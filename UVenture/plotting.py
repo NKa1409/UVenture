@@ -211,7 +211,8 @@ def create_xic(rt_list, intensities, title, filepath, retention_time=0):
     plot_heights = [max(intensities)/4 for i in range(len(identified_peak_times))]
     ax.scatter(identified_peak_times, plot_heights, color="green", label="identified peak", s=20, alpha=0.5)
     if not retention_time == 0:
-        width_observed_time = (max(rt_list) / len(rt_list)) * 40
+        len_timestep = ((max(rt_list) - min(rt_list)) / len(rt_list))
+        width_observed_time = len_timestep * 5
         ax.bar(retention_time, max(intensities), color="red", label="observed time", alpha=0.5, width=width_observed_time)
         xic_peak_index = rt_list.index(min(rt_list, key=lambda x: abs(retention_time - x)))
         ax.scatter(retention_time, intensities[xic_peak_index], color="red", marker="x", s=100)
