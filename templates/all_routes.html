@@ -1,16 +1,14 @@
-<!DOCTYPE html>
-<html>
-<head>
-    
-</head>
-<body>
-    {% include 'navbar.html' %}
+{% extends 'base.html' %}
+{% block title %}UVenture - All Routes{% endblock %}
 
-    <h1>Available pages:</h1>
+
+
+{% block content %}
+    <h1>All Available Routes</h1>
     <p>
-    {% for url in urls %}
-        <a href="{{ url }}">{{ url }}</a><br>
-    {% endfor %}
+        {% for url in urls %}
+            » <a href="{{ url }}">{{ url }}</a><br>
+        {% endfor %}
     </p>
-</body>
-</html>
+{% endblock %}
+

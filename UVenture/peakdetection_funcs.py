@@ -3,7 +3,7 @@ import datetime
 import sys
 import numpy as np
 import scipy
-
+from scipy.sparse import diags
 
 def baseline_als(y, lam=1e6, p=0.01, niter=10, window_min_vals=4):
     """Asymmetric Least Squares (ALS) baseline correction with correct matrix sizing."""
@@ -13,8 +13,6 @@ def baseline_als(y, lam=1e6, p=0.01, niter=10, window_min_vals=4):
     # p: asymmetry parameter (0 < p < 1, larger values give more weight to the left side)
     # niter: number of iterations for convergence
     # Returns:
-    from scipy.sparse import diags
-    import numpy as np
     if not isinstance(window_min_vals, int):
         print("window_min_vals must be an integer!")
         try:
@@ -86,6 +84,8 @@ def get_window_size_by_frequency(intensityvals, timevals, min_width=3, max_width
             idxs = np.where(xf >= 0)
             freqs = xf[idxs]
             mags = np.abs(yf[idxs])
+            if len(mags) < 6:
+                continue
             dom_freqs.append(freqs[np.argmax(mags[4:])])
     if len(dom_freqs) > 0:
         #print("dom_freqs: " + str(dom_freqs))

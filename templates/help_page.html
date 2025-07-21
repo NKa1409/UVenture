@@ -1,11 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-    
-</head>
-<body>
-    {% include 'navbar.html' %}
-    
+{% extends 'base.html' %}
+{% block title %}UVenture - Help{% endblock %}
+
+
+
+{% block content %}
     <h1>Help Page</h1>
 
     <div class="table-of-contents" style="margin-bottom: 20px;">
@@ -39,6 +37,10 @@
 
         <input style="width: auto; margin-top: 20px;" type="submit" value="Submit FAQ">
     </form>
+{% endblock %}
 
-</body>
-</html>
+
+
+
+
+

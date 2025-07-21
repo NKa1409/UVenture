@@ -1,81 +1,65 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <script>
-        function updatePlot() {
-            var xic_mass = $('#xic_mass').val();
-            var mass_deviation = $('#mass_deviation').val();
-            var spec_index = $('#spec_index').val();
-            var fileSelect = $('#fileSelect').val();
+{% extends 'base.html' %}
+{% block title %}UVenture - File viewer{% endblock %}
 
-            // Show loading circle before the request
-            $('#plotArea1').html('<div class="loader">Loading...</div>');
-            $('#plotArea2').html('<div class="loader">Loading...</div>');
+<script>
+    function updatePlot() {
+        var xic_mass = $('#xic_mass').val();
+        var mass_deviation = $('#mass_deviation').val();
+        var spec_index = $('#spec_index').val();
+        var fileSelect = $('#fileSelect').val();
 
-            // Add CSS for the loader
-            $('<style>.loader {border: 16px solid #f3f3f3; border-radius: 50%; border-top: 16px solid #3498db; width: 120px; height: 120px; -webkit-animation: spin 2s linear infinite; animation: spin 2s linear infinite; position: relative; top: 20%; left: 30%; transform: translate(-20%, -30%);} @-webkit-keyframes spin {0% { -webkit-transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); }} @keyframes spin {0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); }}</style>').appendTo('head');
+        // Show loading circle before the request
+        $('#plotArea1').html('<div class="loader">Loading...</div>');
+        $('#plotArea2').html('<div class="loader">Loading...</div>');
 
-            $.ajax({
-                url: '/update_mzml_plot_viewer_plots', // replace with your Flask route
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({ 'xic_mass': xic_mass, 'spec_index': spec_index, "fileSelect": fileSelect, "mass_deviation": mass_deviation }),
-                success: function(response) {
-                    // Assuming the response is a matplotlib object
-                    var plot1 = response['plot1'];
-                    var plot2 = response['plot2'];
+        // Add CSS for the loader
+        $('<style>.loader {border: 16px solid #f3f3f3; border-radius: 50%; border-top: 16px solid #3498db; width: 120px; height: 120px; -webkit-animation: spin 2s linear infinite; animation: spin 2s linear infinite; position: relative; top: 20%; left: 30%; transform: translate(-20%, -30%);} @-webkit-keyframes spin {0% { -webkit-transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); }} @keyframes spin {0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); }}</style>').appendTo('head');
 
-                    // Convert the matplotlib objects to base64 encoded PNG
-                    var plot1Base64 = 'data:image/png;base64,' + plot1;
-                    var plot2Base64 = 'data:image/png;base64,' + plot2;
+        $.ajax({
+            url: '/update_mzml_plot_viewer_plots', // replace with your Flask route
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ 'xic_mass': xic_mass, 'spec_index': spec_index, "fileSelect": fileSelect, "mass_deviation": mass_deviation }),
+            success: function(response) {
+                // Assuming the response is a matplotlib object
+                var plot1 = response['plot1'];
+                var plot2 = response['plot2'];
 
-                    // Append the images to the divs with style to fit the container
-                    $('#plotArea1').html('<img src="' + plot1Base64 + '" style="max-width:100%; height: auto;">');
-                    $('#plotArea2').html('<img src="' + plot2Base64 + '" style="max-width:100%; height: auto;">');
-                    
-                },
-                error: function(error) {
-                    console.log(error);
-                }
-            });
+                // Convert the matplotlib objects to base64 encoded PNG
+                var plot1Base64 = 'data:image/png;base64,' + plot1;
+                var plot2Base64 = 'data:image/png;base64,' + plot2;
 
-            
-        }
-    </script>
-    <script>
-        function downloadPlots() {
-            if(document.getElementById('plot1Checkbox').checked) {
-                var link = document.createElement('a');
-                link.href = $('#plotArea1').find('img').attr('src');
-                link.download = 'plot1.png';
-                link.click();
+                // Append the images to the divs with style to fit the container
+                $('#plotArea1').html('<img src="' + plot1Base64 + '" style="max-width:100%; height: auto;">');
+                $('#plotArea2').html('<img src="' + plot2Base64 + '" style="max-width:100%; height: auto;">');
+                
+            },
+            error: function(error) {
+                console.log(error);
             }
-            if(document.getElementById('plot2Checkbox').checked) {
-                var link = document.createElement('a');
-                link.href = $('#plotArea2').find('img').attr('src');
-                link.download = 'plot2.png';
-                link.click();
-            }
-        }
-    </script>
-    <style>
-        body p {
-            width: 50%;
-            text-align: left;
-            font-family: Arial, sans-serif;
-            font-size: 1.1em;
-            color: #333;
-        }
-        .plot_div {
-            display: flex;
-            justify-content: space-between;
-            width: 100%;
-        }
-    </style>
-</head>
-<body>
-    {% include 'navbar.html' %}
+        });
 
+        
+    }
+</script>
+<script>
+    function downloadPlots() {
+        if(document.getElementById('plot1Checkbox').checked) {
+            var link = document.createElement('a');
+            link.href = $('#plotArea1').find('img').attr('src');
+            link.download = 'plot1.png';
+            link.click();
+        }
+        if(document.getElementById('plot2Checkbox').checked) {
+            var link = document.createElement('a');
+            link.href = $('#plotArea2').find('img').attr('src');
+            link.download = 'plot2.png';
+            link.click();
+        }
+    }
+</script>
+
+{% block content %}
     <h1>.mzML viewer</h1>
 
     <div class="form">
@@ -110,14 +94,6 @@
         <div id="plotArea1" style="width: 50%; height: 500px; border: 1px solid black;">XIC</div>
         <div id="plotArea2" style="width: 50%; height: 500px; border: 1px solid black;">Mass spectrum</div>
     </div>
+{% endblock %}
 
-    <hr>
 
-    <div>
-        
-
-    </div>
-
-    
-</body>
-</html>
