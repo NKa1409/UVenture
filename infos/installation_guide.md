@@ -19,7 +19,7 @@ This guide provides detailed instructions to set up and run a Python script from
 
 Go to the official Python download page: <a href="https://www.python.org/downloads/" target="_blank">https://www.python.org/downloads/</a>
 
-Download a supported version of Python 3 (3.12.0)
+Download a supported version of Python 3 (3.12.2)
 
 ### 1.2 Install Python
 
@@ -29,6 +29,7 @@ Download a supported version of Python 3 (3.12.0)
 3. Click **Customize installation**, enable all options, and proceed.
 4. Select **Install for all users** on the next screen.
 5. Click **Install**.
+6. After the installation has finished, be sure to DISABLE the path length limit. Otherwise the program will not work properly.
 
 #### macOS:
 1. Open the downloaded `.pkg` installer.
