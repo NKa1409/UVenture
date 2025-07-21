@@ -922,7 +922,9 @@ class Webpage:
                 ms_filepath = os.path.join(self.mzml_folder, lines[0].split("\t")[0])
                 parentfolder_msfile = os.path.join(self.results_folder, str(".".join(lines[0].split("\t")[0].split(".")[:-1])))
                 mz = lines[0].split("\t")[1]
+                mz = mz.replace(",", ".")
                 rt = lines[0].split("\t")[2]
+                rt = rt.replace(",", ".")
                 mz = float(mz)
                 rt = float(rt)
                 settings_dict = ast.literal_eval(lines[0].split("\t")[3])
