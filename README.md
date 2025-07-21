@@ -21,6 +21,7 @@ In contrast to other programs, UVenture creates a local webserver that is reacha
 Future versions with enhanced functionality and optimizations are planned and will be published in this repository.
 
 ### Features
+-  Automatic installer script for Windows OS
 -  Easy-to-use (simple user interface on a local website)
 -  Flexible parameter settings for different instruments and experimental setups.
 -  Identification of sum formulas of precursor ions and related fragment ions.
@@ -34,17 +35,21 @@ Future versions with enhanced functionality and optimizations are planned and wi
 
 # Installation & Usage
 
-You can either follow the detailled manual installation instructions as shown in infos/installation_guide.md, or use the automatic installer script that is provided in `start_on_windows.bat` (for Windows) or `start_on_linux.sh` for Linux based operating systems. For new users it is strongly recommended to use the automatic installer script.
+You can either follow the detailled manual installation instructions as shown in infos/installation_guide.md, or use the automatic installer script that is provided in `start_on_windows.bat` (for Windows). For new users it is strongly recommended to use the automatic installer script.
 
 <br>
 
 ## Automatic installation (**recommended**)
 
-**Step 1)** Download and extract the program folder on your computer.  
+**Step 1)** Download and extract the program folder on your computer.  After clicking the button shown below, choose `Download ZIP`. The download will start automatically. After the download has finished, unzip the folder.
+![Download ZIP folder](infos/images/DownloadzipImage.png)
 
-**Step 2)** Double-click the `start_on_windows.bat` (for Windows) or `start_on_linux.sh` (for Linux) script. The installation will be handled automatically - please be patient, installation of the required packages might take a **long** time. Once finished, a new browser tab with the tool will open.
+**Step 2)** Double-click the `start_on_windows.bat` (for Windows) script. The installation will be handled automatically - please be patient, installation of the required packages might take a **long** time. Once finished, a new browser tab with the tool will open.
 
-* To restart the program (e.g. after a reboot), just click on the same `start_on_windows.bat` or `start_on_linux.sh` that was used in step 2.
+* To restart the program (e.g. after a reboot), just click on the same `start_on_windows.bat` that was used in step 1.
+
+> If the automatic installer script gets flagged by Windows Defender you can click 'More Info' > 'Run anyway'.
+> Otherwise you can also install the script manually.
 
 <br><br>
 
