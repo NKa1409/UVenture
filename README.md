@@ -42,7 +42,9 @@ You can either follow the detailled manual installation instructions as shown in
 ## Automatic installation (**recommended**)
 
 **Step 1)** Download and extract the program folder on your computer.  After clicking the button shown below, choose `Download ZIP`. The download will start automatically. After the download has finished, unzip the folder.
-![Download ZIP folder](infos/images/DownloadzipImage.png)
+<p align="center">
+  <img src="infos/images/DownloadzipImage.png" alt="Download ZIP Folder" width="150">
+</p>
 
 **Step 2)** Double-click the `start_on_windows.bat` (for Windows) script. The installation will be handled automatically - please be patient, installation of the required packages might take a **long** time. Once finished, a new browser tab with the tool will open.
 
