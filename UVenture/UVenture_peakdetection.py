@@ -151,7 +151,7 @@ def get_all_possible_peaks(ms_file, settings_dict, mass_range=1,
                         if not peaklist_filename == "":
                             # Save the peak to the peaklist file
                             with open(peaklist_filename, "a") as f:
-                                f.write(f"{new_row['mass']}\t{new_row['rt']}\t{round(new_row['area'], 2)}\t{round(new_row["height"], 2)}\t{times[left]}\t{times[right]}\n")
+                                f.write(f"{new_row['mass']}\t{new_row['rt']}\t{round(new_row['area'], 2)}\t{round(new_row['height'], 2)}\t{times[left]}\t{times[right]}\n")
                             print("Peak saved to peaklist: " + str(peaklist_filename) + ".")
                         if not mzrt_filename == "":
                             # Save the peak to the mzrt file to be processed directly
