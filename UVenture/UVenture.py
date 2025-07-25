@@ -320,11 +320,7 @@ class OneAnalysis:
             avg_rts = [i for i in peak_avg_int_dict.keys()]
 
             try:
-                if int(len(avg_ints)) < 2:
-                    polyorder = 1
-                else:
-                    polyorder = 2
-                smooth_intensities = scipy.signal.savgol_filter(avg_ints, int(len(avg_ints) / 5), polyorder)
+                smooth_intensities = scipy.signal.savgol_filter(avg_ints, int(len(avg_ints) / 5), 2)
             except Exception as e:
                 print("Error while smoothing intensities: " + str(e))
                 print(traceback.format_exc())

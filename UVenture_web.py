@@ -715,23 +715,174 @@ class Webpage:
             self.start_background_task_checking()
             return flask.jsonify({"status": "success", "message": "Processes killed"})
 
-        @self.app.route("/api/get_settings", methods=["GET"])
-        def get_settings():
-            settings = self.get_settings_dict()
-            return flask.jsonify(settings)
-        
         @self.app.route("/api/stop_script", methods=["GET", "POST"])
         def stop_script():
             import sys
             sys.exit("Script stopped via API command...")
             return "Script stopped via API command..."
 
-        @self.app.route("/api/get_available_files", methods=["GET"])
-        def get_available_files():
+        @self.app.route("/api/download_file", methods=["GET", "POST"])
+        def download_file():
+            """Download a file from the server."""
+            filename = flask.request.args.get("filename", type=str)
+            filename = os.path.normpath(filename)  # Normalize the path to prevent directory traversal attacks
+            if not filename:
+                return flask.jsonify({"status": "error", "message": "No filepath provided", "description": "Please format the URL like this: /api/download_file?filename=your_file.txt"})
+            filepath = os.path.join(self.results_folder, filename)
+            if not os.path.exists(filepath):
+                return flask.jsonify({"status": "error", "message": "File does not exist", "description": "Please check the filename and try again."})
+            download_name = os.path.basename(filepath)
+            return flask.send_file(filepath, as_attachment=True, download_name=download_name)
+
+        @self.app.route("/api/delete_file", methods=["GET", "POST"])
+        def delete_file():
+            """Delete a file from the server."""
+            filename = flask.request.args.get("filename", type=str)
+            filename = os.path.normpath(filename)  # Normalize the path to prevent directory traversal attacks
+            if not filename:
+                return flask.jsonify({"status": "error", "message": "No filepath provided", "description": "Please format the URL like this: /api/delete_file?filename=your_file.txt"})
+            filepath = os.path.join(self.results_folder, filename)
+            if not os.path.exists(filepath):
+                return flask.jsonify({"status": "error", "message": "File does not exist", "description": "Please check the filename and try again."})
+            try:
+                os.remove(filepath)
+                return flask.jsonify({"status": "success", "message": "File deleted successfully"})
+            except Exception as e:
+                return flask.jsonify({"status": "error", "message": str(e)})
+        
+        @self.app.route("/api/get_files", methods=["GET"])
+        def get_files():
+            # Get all files in self.result_folder recursively
+            if not os.path.exists(self.results_folder):
+                return flask.jsonify({"status": "error", "message": "Results folder does not exist"})
+            files = []
+            for root, dirs, filenames in os.walk(self.results_folder):
+                for filename in filenames:
+                    filepath = os.path.join(root, filename)
+                    relative_path = os.path.relpath(filepath, self.results_folder)
+                    files.append(relative_path.replace("\\", "/"))
+            files.sort()
+            # Convert the filelist into a list of lists with the respective files in a subfolder
+            file_structure = {}
+            for file in files:
+                subfolder = os.path.dirname(file)
+                if subfolder not in file_structure:
+                    file_structure[subfolder] = []
+                file_structure[subfolder].append(os.path.basename(file))
+            return flask.jsonify(file_structure)
+
+        @self.app.route("/api/get_progress_of_analysis", methods=["GET"])
+        def get_progress_of_analysis():
+            filename_original = flask.request.args.get("filename", type=str)
+            if filename_original is None:
+                return flask.jsonify({"status": "error", "message": "Missing parameters", "description": "Please provide filename parameters in the URL like this: /api/get_progress_of_analysis?filename=your_file.mzML"})
+            # Get all folders and .zip files in the results folder + filename
+            if not os.path.exists(self.results_folder):
+                return flask.jsonify({"status": "error", "message": "Results folder does not exist"})
+            files = []
+            for root, dirs, filenames in os.walk(self.results_folder):
+                for fname in filenames:
+                    filepath = os.path.join(root, fname)
+                    relative_path = os.path.relpath(filepath, self.results_folder)
+                    files.append(relative_path.replace("\\", "/"))
+            files.sort()
+            mzml_file = ".".join(filename_original.split(".")[:-1])
+            print("Searching for files related to mzML file: ", mzml_file)
+            files = [f for f in files if mzml_file in f]
+            if len(files) == 0:
+                return flask.jsonify({"status": "error", "message": "No computations have been made for the given filename"})
+            finished_files = [f for f in files if f.endswith(".zip")]
+            unfinished_files = [f for f in files if f.endswith("oa_log.txt")]
+            progress_dict = {}
+            for f in unfinished_files:
+                try:
+                    with open(os.path.join(self.results_folder, f), "r", encoding="utf-8") as f1:
+                        lines = f1.readlines()
+                except Exception as e:
+                    print(f"Error reading file: {e}")
+                    try:
+                        with open(os.path.join(self.results_folder, f), "r", encoding="utf-8-sig") as f2:
+                            lines = f2.readlines()
+                    except Exception as e:
+                        print(f"Error reading fallback file: {e}")
+                        try:
+                            with open(os.path.join(self.results_folder, f), "r", encoding="latin1") as f3:
+                                lines = f3.readlines()
+                        except Exception as e:
+                            print(f"Error reading fallback file: {e}")
+                            lines = []
+                lines = [line.strip() for line in lines]
+                progress = 0.01
+                for l in lines:
+                    progress = 0.1 if "INFO:\tRetention time adjusted to:" in l else progress
+                    progress = 0.15 if "INFO:\tFinished searching for spectra..." in l else progress
+                    progress = 0.2 if "INFO:\tFinished first prediction of molecular ion..." in l else progress
+                    progress = 0.25 if "INFO:\tNew best_molecular_ion_prediction:" in l else progress
+                    progress = 0.3 if "INFO:\tFinished prediction of molecular ion..." in l else progress
+                    progress = 0.7 if "INFO:\tFinished prediction of fragment ions..." in l else progress
+                    progress = 0.8 if "INFO:\tFinished creating matching fragments list..." in l else progress
+                    progress = 0.9 if "INFO:\tCreating summary plot and txt file..." in l else progress
+                progress_dict[f] = {"status": "unfinished", "progress": progress}
+            for f in finished_files:
+                progress_dict[f] = {"status": "finished", "progress": 1.0}
+            with open(self.taskstorage_filepath, "r") as f:
+                lines = f.readlines()
+            lines = [line for line in lines if line.strip() != "" and line[0] != "#" and "\t" in line]
+            lines = [line.strip().split("\t") for line in lines]
+            lines = [line for line in lines if line[0] == filename_original]
+            for line in lines:
+                progress_dict[f"filename_{line[0]}_mz_{line[1]}_rt_{line[2]}"] = {"status": "queued", "progress": 0.0}
+            return flask.jsonify(progress_dict)
+
+        @self.app.route("/api/get_available_mzml_files", methods=["GET"])
+        def get_available_mzml_files():
             # Get the list of available files in the mzml folder
             self.available_files = os.listdir(self.mzml_folder)
             self.available_files = [f for f in self.available_files if f.endswith(".mzML")]
             return flask.jsonify(self.available_files)
+
+        @self.app.route("/api/delete_mzml_file", methods=["GET", "POST"])
+        def delete_mzml_file():
+            """Delete a mzML file from the server."""
+            filename = flask.request.args.get("filename", type=str)
+            if not filename:
+                return flask.jsonify({"status": "error", "message": "No filename provided", "description": "Please format the URL like this: /api/delete_mzml_file?filename=your_file.mzML"})
+            filepath = os.path.join(self.mzml_folder, filename)
+            if not os.path.exists(filepath):
+                return flask.jsonify({"status": "error", "message": "File does not exist", "description": "Please check the filename and try again."})
+            try:
+                os.remove(filepath)
+                self.available_files.remove(filename)
+                return flask.jsonify({"status": "success", "message": "File deleted successfully"})
+            except Exception as e:
+                return flask.jsonify({"status": "error", "message": str(e)})
+
+        @self.app.route("/api/upload_mzml_file", methods=["POST"])
+        def upload_mzml_file_api():
+            """Upload a mzML file via API."""
+            if 'file' not in flask.request.files:
+                return flask.jsonify({"status": "error", "message": "No file part in the request"})
+            file = flask.request.files['file']
+            if file.filename == '':
+                return flask.jsonify({"status": "error", "message": "No selected file"})
+            if not file.filename.endswith(".mzML"):
+                return flask.jsonify({"status": "error", "message": "File is not a .mzML file"})
+            filename = werkzeug.utils.secure_filename(file.filename)
+            os.makedirs(self.mzml_folder, exist_ok=True)
+            file.save(os.path.join(self.mzml_folder, filename))
+            self.available_files.append(filename)
+            return flask.jsonify({"status": "success", "message": f"File {filename} uploaded successfully"})
+        
+        @self.app.route("/api/download_mzml_file", methods=["GET"])
+        def download_mzml_file():
+            """Download a mzML file from the server."""
+            filename = flask.request.args.get("filename", type=str)
+            if not filename:
+                return flask.jsonify({"status": "error", "message": "No filename provided", "description": "Please format the URL like this: /api/download_mzml_file?filename=your_file.mzML"})
+            filepath = os.path.join(self.mzml_folder, filename)
+            if not os.path.exists(filepath):
+                return flask.jsonify({"status": "error", "message": "File does not exist", "description": "Please check the filename and try again."})
+            return flask.send_file(filepath, as_attachment=True, download_name=filename)
 
         @self.app.route("/api/queue_analysis", methods=["GET", "POST"])
         def queue_analysis():
@@ -741,7 +892,7 @@ class Webpage:
             settings_dict = self.get_settings_dict()
             filename = flask.request.args.get("filename", type=str)
             if mz is None or rt is None or filename is None:
-                return flask.jsonify({"status": "error", "message": "Missing parameters"})
+                return flask.jsonify({"status": "error", "message": "Missing parameters", "description": "Please provide mz, rt, and filename parameters in the URL like this: /api/queue_analysis?mz=123.456&rt=12.34&filename=your_file.mzML"})
             with open(self.taskstorage_filepath, "a") as f:
                 f.write(filename + "\t" + str(mz) + "\t" + str(rt) + "\t" + str(settings_dict) + "\n")
             print("Task added to task storage file")
@@ -761,7 +912,7 @@ class Webpage:
                     cpu_temperature = "NA"
                 memory_utilization = psutil.virtual_memory().percent
                 available_memory = str(round(psutil.virtual_memory().available / (1024 * 1024 * 1024), 3)) + " GB"
-                cpu_utilization = psutil.cpu_percent(interval=0.3)
+                cpu_utilization = psutil.cpu_percent(interval=0.3)                
             except ImportError:
                 server_uptime = datetime.datetime.now() - self.start_time
                 cpu_utilization = "NA"
@@ -807,6 +958,11 @@ class Webpage:
                 "pending_analyses": pending_analyses,
             }
             return flask.jsonify(status)
+
+        @self.app.route("/api/get_settings", methods=["GET"])
+        def get_settings():
+            settings = self.get_settings_dict()
+            return flask.jsonify(settings)
 
         @self.app.route('/favicon.ico')
         def favicon():
@@ -1018,6 +1174,24 @@ class Webpage:
         print("Process added to running processes list")
         self.update_running_processes()
         
+    def get_ram_usage_of_all_processes(self):
+        # Get the total RAM usage of all running processes including the webserver itself and all other subprocesses
+        total_ram_usage = 0
+        for p in self.running_processes:
+            try:
+                total_ram_usage += p.memory_info().rss  # Resident Set Size
+            except AttributeError:
+                print(f"Process {p.name} does not have memory_info() method.")
+        ram_usage_mb = total_ram_usage / (1024 * 1024)  # Convert to MB
+        try:
+            import psutil
+            ram_usage_percentage = (ram_usage_mb / psutil.virtual_memory().total) * 100
+        except Exception as e:
+            print(f"Error calculating RAM usage percentage: {e}")
+            ram_usage_percentage = 0
+        avg_ram_usage_per_process_in_mb = ram_usage_mb / len(self.running_processes) if self.running_processes else 0
+        return (ram_usage_mb, ram_usage_percentage, avg_ram_usage_per_process_in_mb)
+
 
 
 
