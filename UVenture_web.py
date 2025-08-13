@@ -67,6 +67,12 @@ def resource_path(relative_path):
 
 class Webpage:
     def __init__(self) -> None:
+        self.log_folder = resource_path("log/")
+        os.makedirs(self.log_folder, exist_ok=True)
+        self.log_peaklist_folder = os.path.join(self.log_folder, "peaklists/")
+        os.makedirs(self.log_peaklist_folder, exist_ok=True)
+        self.webserver_log_filepath = os.path.join(self.log_folder, "webserver_log.log")
+        self.add_webserver_log_entry("Webserver started")
         self.version = "1.0.1"
         self.python_version = "Python " + str(sys.version_info.major) + "." + str(sys.version_info.minor) + "." + str(sys.version_info.micro)
         self.path_of_this_file = os.path.abspath(__file__)
@@ -161,6 +167,8 @@ class Webpage:
                         print(e)
                         print(traceback.format_exc())
                         return flask.render_template_string("An error occured during the analysis: " + str(e) + "\n \n \n" + str(traceback.format_exc()))
+                    self.add_webserver_log_entry("Task started by: \t" + str(self.get_request_info(request=flask.request)))
+                    self.add_webserver_log_entry("Peak analysis started for file: " + str(form_data["fileselection"]) + " with mz_peak_analysis: " + str(form_data["mz_peak_analysis"]) + " and retention_time: " + str(form_data["retention_time"]))
                     print("Peak analysis started")
 
                 if form_data["mass_analysis_cb"] == "true":
@@ -184,13 +192,18 @@ class Webpage:
                     thread_name = "UVenture_Prediction_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_file_" + str(form_data["fileselection"]) + "_mass_" + str(form_data["mz_mass_analysis"]) + "_specindex_" + str(form_data["spec_index"])
                     thread = threading.Thread(target=run_prediction_analysis, name=thread_name)
                     thread.start()
+                    self.add_webserver_log_entry("Task started by: \t" + str(self.get_request_info(request=flask.request)))
+                    self.add_webserver_log_entry("Mass analysis started for file: " + str(form_data["fileselection"]) + " with mz_mass_analysis: " + str(form_data["mz_mass_analysis"]) + " and spec_index: " + str(form_data["spec_index"]))
                     print("Mass analysis started")
                 
                 if form_data["peak_analysis_list_cb"] == "true":
                     if "peak_list_file" in flask.request.files:
                         peak_list_file = flask.request.files["peak_list_file"]
                         peak_list_file = io.StringIO(peak_list_file.read().decode("utf-8"))
-                        print(peak_list_file)
+                        # Save the peak_list_file
+                        new_peak_list_filepath = os.path.join(self.log_peaklist_folder, str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S")) + "_" + str(".".join(form_data["fileselection"].split(".")[:-1])) + "_peak_list.txt")
+                        with open(new_peak_list_filepath, "w") as f:
+                            f.write(peak_list_file.getvalue())
                     else:
                         return flask.render_template_string("No peak list given! Cannot analyze peaks without a list. \n Please enter a peak list to analyse.")
 
@@ -204,8 +217,11 @@ class Webpage:
                             f.write("\t")
                             f.write(str(settings_dict))
                             f.write("\n")
-                
+                    self.add_webserver_log_entry("Task started by: \t" + str(self.get_request_info(request=flask.request)))
+                    self.add_webserver_log_entry("Peak list analysis started for file: " + str(form_data["fileselection"]) + " with peak_list_file: " + str(new_peak_list_filepath))
+
                 print("Analysis started")
+
                 return flask.redirect("/show_currently_running")
             return flask.render_template("queue_new_analysis.html", files=self.available_files)
 
@@ -235,6 +251,8 @@ class Webpage:
                         for key, value in write_settings_dict.items():
                             f.write(key + "=" + str(value) + "\n")
                     print("New settings saved")
+                    self.add_webserver_log_entry("Main settings changed by: \t" + str(self.get_request_info(request=flask.request)))
+                    self.add_webserver_log_entry("New main settings: " + str(write_settings_dict))
                     return flask.redirect("/main_settings")
             return flask.render_template("main_settings.html", settings_dict=main_settings_dict)
 
@@ -255,6 +273,8 @@ class Webpage:
                 if flask.request.form.get("button") == "restore_default_values":
                     os.remove(self.settings_file_filepath)
                     shutil.copyfile(self.settings_default_file_filepath, self.settings_file_filepath)
+                self.add_webserver_log_entry("Settings changed by: \t" + str(self.get_request_info(request=flask.request)))
+                self.add_webserver_log_entry("New settings: " + str(form_data))
                 return flask.redirect("/change_settings")
                 
             return flask.render_template("change_settings.html", settings_dict=settings_dict)
@@ -271,12 +291,14 @@ class Webpage:
                             shutil.rmtree(folderpath)  # Delete the file after sending
                         except Exception as e:
                             print(f"Error deleting file: {e}")
+                        self.add_webserver_log_entry("Results deleted after download!")
                         return response
                 if "download_summary_only" in flask.request.form.to_dict():
                     filepath = os.path.join(self.results_folder, ".".join(flask.request.form["fileselection"].split(".")[:-1]), "SUMMARY.txt")
                     if not os.path.exists(filepath):
                         return flask.render_template_string("Summary file does not exist!")
                     else:
+                        self.add_webserver_log_entry("Summary file downloaded by: \t" + str(self.get_request_info(request=flask.request)))
                         return flask.send_file(filepath, as_attachment=True, download_name=flask.request.form["fileselection"] + "SUMMARY.txt")
                 folderpath = os.path.join(self.results_folder, ".".join(flask.request.form["fileselection"].split(".")[:-1]))
                 print(folderpath)
@@ -289,6 +311,8 @@ class Webpage:
                                            os.path.relpath(os.path.join(root, file), 
                                            os.path.join(folderpath, '..')))
                 zip_buffer.seek(0)
+                self.add_webserver_log_entry("Results .zip downloaded by: \t" + str(self.get_request_info(request=flask.request)))
+                self.add_webserver_log_entry("Results .zip downloaded: " + str(flask.request.form["fileselection"]))
                 return flask.send_file(zip_buffer, as_attachment=True, download_name="results.zip")
             return flask.render_template("resultsdownload.html", files=self.available_files, basefolder=self.results_folder)
 
@@ -510,6 +534,8 @@ class Webpage:
                     p.start()
                     print("Peak detection process started with name: " + p.name)
                     self.running_processes.append(p)
+                    self.add_webserver_log_entry("Peak detection process started by: \t" + str(self.get_request_info(request=flask.request)))
+                    self.add_webserver_log_entry(f"Peak detection started for file: {form_data['fileselection']}. Starting analysis once detected: {start_analysis_once_detected}")
                     return flask.redirect("/show_currently_running")
 
             return flask.render_template("detect_peaks.html", files=self.available_files)
@@ -545,6 +571,8 @@ class Webpage:
                     if not filenames:
                         print("No valid mzML files uploaded!")
                         return flask.render_template_string("No valid mzML files uploaded!")
+                    self.add_webserver_log_entry("File(s) uploaded by: \t" + str(self.get_request_info(request=flask.request)))
+                    self.add_webserver_log_entry("File(s) uploaded: " + str(filenames))
                     return flask.redirect("/queue_new_analysis"), 200
                 else:
                     return flask.render_template_string("No file selected!")
@@ -597,10 +625,12 @@ class Webpage:
             if os.path.isfile(folder):
                 #Delete the file
                 os.remove(folder)
+                self.add_webserver_log_entry("File deleted: " + str(folder) + " by: " + str(self.get_request_info(request=flask.request)))
                 return flask.redirect("/file_browser/" + str(upper_folder))
             else:
                 if os.path.exists(folder):
                     shutil.rmtree(folder)
+                    self.add_webserver_log_entry("Folder deleted: " + str(folder) + " by: " + str(self.get_request_info(request=flask.request)))
                     return flask.redirect("/file_browser/" + str(upper_folder))
                 else:
                     return flask.render_template_string("Folder does not exist!")
@@ -686,6 +716,7 @@ class Webpage:
         def delete_taskstorage():
             with open(self.taskstorage_filepath, "w") as f:
                 f.write("")
+            self.add_webserver_log_entry("Task storage file deleted by: \t" + str(self.get_request_info(request=flask.request)))
             return flask.jsonify({"status": "success", "message": "Task storage file deleted"})
         
         @self.app.route("/api/kill_all_processes", methods=["GET", "POST"])
@@ -713,176 +744,27 @@ class Webpage:
                     print(e)
                     print(traceback.format_exc())
             self.start_background_task_checking()
+            self.add_webserver_log_entry("All processes killed by: \t" + str(self.get_request_info(request=flask.request)))
             return flask.jsonify({"status": "success", "message": "Processes killed"})
 
+        @self.app.route("/api/get_settings", methods=["GET"])
+        def get_settings():
+            settings = self.get_settings_dict()
+            return flask.jsonify(settings)
+        
         @self.app.route("/api/stop_script", methods=["GET", "POST"])
         def stop_script():
             import sys
+            self.add_webserver_log_entry("Script stopped via API command by: \t" + str(self.get_request_info(request=flask.request)))
             sys.exit("Script stopped via API command...")
             return "Script stopped via API command..."
 
-        @self.app.route("/api/download_file", methods=["GET", "POST"])
-        def download_file():
-            """Download a file from the server."""
-            filename = flask.request.args.get("filename", type=str)
-            filename = os.path.normpath(filename)  # Normalize the path to prevent directory traversal attacks
-            if not filename:
-                return flask.jsonify({"status": "error", "message": "No filepath provided", "description": "Please format the URL like this: /api/download_file?filename=your_file.txt"})
-            filepath = os.path.join(self.results_folder, filename)
-            if not os.path.exists(filepath):
-                return flask.jsonify({"status": "error", "message": "File does not exist", "description": "Please check the filename and try again."})
-            download_name = os.path.basename(filepath)
-            return flask.send_file(filepath, as_attachment=True, download_name=download_name)
-
-        @self.app.route("/api/delete_file", methods=["GET", "POST"])
-        def delete_file():
-            """Delete a file from the server."""
-            filename = flask.request.args.get("filename", type=str)
-            filename = os.path.normpath(filename)  # Normalize the path to prevent directory traversal attacks
-            if not filename:
-                return flask.jsonify({"status": "error", "message": "No filepath provided", "description": "Please format the URL like this: /api/delete_file?filename=your_file.txt"})
-            filepath = os.path.join(self.results_folder, filename)
-            if not os.path.exists(filepath):
-                return flask.jsonify({"status": "error", "message": "File does not exist", "description": "Please check the filename and try again."})
-            try:
-                os.remove(filepath)
-                return flask.jsonify({"status": "success", "message": "File deleted successfully"})
-            except Exception as e:
-                return flask.jsonify({"status": "error", "message": str(e)})
-        
-        @self.app.route("/api/get_files", methods=["GET"])
-        def get_files():
-            # Get all files in self.result_folder recursively
-            if not os.path.exists(self.results_folder):
-                return flask.jsonify({"status": "error", "message": "Results folder does not exist"})
-            files = []
-            for root, dirs, filenames in os.walk(self.results_folder):
-                for filename in filenames:
-                    filepath = os.path.join(root, filename)
-                    relative_path = os.path.relpath(filepath, self.results_folder)
-                    files.append(relative_path.replace("\\", "/"))
-            files.sort()
-            # Convert the filelist into a list of lists with the respective files in a subfolder
-            file_structure = {}
-            for file in files:
-                subfolder = os.path.dirname(file)
-                if subfolder not in file_structure:
-                    file_structure[subfolder] = []
-                file_structure[subfolder].append(os.path.basename(file))
-            return flask.jsonify(file_structure)
-
-        @self.app.route("/api/get_progress_of_analysis", methods=["GET"])
-        def get_progress_of_analysis():
-            filename_original = flask.request.args.get("filename", type=str)
-            if filename_original is None:
-                return flask.jsonify({"status": "error", "message": "Missing parameters", "description": "Please provide filename parameters in the URL like this: /api/get_progress_of_analysis?filename=your_file.mzML"})
-            # Get all folders and .zip files in the results folder + filename
-            if not os.path.exists(self.results_folder):
-                return flask.jsonify({"status": "error", "message": "Results folder does not exist"})
-            files = []
-            for root, dirs, filenames in os.walk(self.results_folder):
-                for fname in filenames:
-                    filepath = os.path.join(root, fname)
-                    relative_path = os.path.relpath(filepath, self.results_folder)
-                    files.append(relative_path.replace("\\", "/"))
-            files.sort()
-            mzml_file = ".".join(filename_original.split(".")[:-1])
-            print("Searching for files related to mzML file: ", mzml_file)
-            files = [f for f in files if mzml_file in f]
-            if len(files) == 0:
-                return flask.jsonify({"status": "error", "message": "No computations have been made for the given filename"})
-            finished_files = [f for f in files if f.endswith(".zip")]
-            unfinished_files = [f for f in files if f.endswith("oa_log.txt")]
-            progress_dict = {}
-            for f in unfinished_files:
-                try:
-                    with open(os.path.join(self.results_folder, f), "r", encoding="utf-8") as f1:
-                        lines = f1.readlines()
-                except Exception as e:
-                    print(f"Error reading file: {e}")
-                    try:
-                        with open(os.path.join(self.results_folder, f), "r", encoding="utf-8-sig") as f2:
-                            lines = f2.readlines()
-                    except Exception as e:
-                        print(f"Error reading fallback file: {e}")
-                        try:
-                            with open(os.path.join(self.results_folder, f), "r", encoding="latin1") as f3:
-                                lines = f3.readlines()
-                        except Exception as e:
-                            print(f"Error reading fallback file: {e}")
-                            lines = []
-                lines = [line.strip() for line in lines]
-                progress = 0.01
-                for l in lines:
-                    progress = 0.1 if "INFO:\tRetention time adjusted to:" in l else progress
-                    progress = 0.15 if "INFO:\tFinished searching for spectra..." in l else progress
-                    progress = 0.2 if "INFO:\tFinished first prediction of molecular ion..." in l else progress
-                    progress = 0.25 if "INFO:\tNew best_molecular_ion_prediction:" in l else progress
-                    progress = 0.3 if "INFO:\tFinished prediction of molecular ion..." in l else progress
-                    progress = 0.7 if "INFO:\tFinished prediction of fragment ions..." in l else progress
-                    progress = 0.8 if "INFO:\tFinished creating matching fragments list..." in l else progress
-                    progress = 0.9 if "INFO:\tCreating summary plot and txt file..." in l else progress
-                progress_dict[f] = {"status": "unfinished", "progress": progress}
-            for f in finished_files:
-                progress_dict[f] = {"status": "finished", "progress": 1.0}
-            with open(self.taskstorage_filepath, "r") as f:
-                lines = f.readlines()
-            lines = [line for line in lines if line.strip() != "" and line[0] != "#" and "\t" in line]
-            lines = [line.strip().split("\t") for line in lines]
-            lines = [line for line in lines if line[0] == filename_original]
-            for line in lines:
-                progress_dict[f"filename_{line[0]}_mz_{line[1]}_rt_{line[2]}"] = {"status": "queued", "progress": 0.0}
-            return flask.jsonify(progress_dict)
-
-        @self.app.route("/api/get_available_mzml_files", methods=["GET"])
-        def get_available_mzml_files():
+        @self.app.route("/api/get_available_files", methods=["GET"])
+        def get_available_files():
             # Get the list of available files in the mzml folder
             self.available_files = os.listdir(self.mzml_folder)
             self.available_files = [f for f in self.available_files if f.endswith(".mzML")]
             return flask.jsonify(self.available_files)
-
-        @self.app.route("/api/delete_mzml_file", methods=["GET", "POST"])
-        def delete_mzml_file():
-            """Delete a mzML file from the server."""
-            filename = flask.request.args.get("filename", type=str)
-            if not filename:
-                return flask.jsonify({"status": "error", "message": "No filename provided", "description": "Please format the URL like this: /api/delete_mzml_file?filename=your_file.mzML"})
-            filepath = os.path.join(self.mzml_folder, filename)
-            if not os.path.exists(filepath):
-                return flask.jsonify({"status": "error", "message": "File does not exist", "description": "Please check the filename and try again."})
-            try:
-                os.remove(filepath)
-                self.available_files.remove(filename)
-                return flask.jsonify({"status": "success", "message": "File deleted successfully"})
-            except Exception as e:
-                return flask.jsonify({"status": "error", "message": str(e)})
-
-        @self.app.route("/api/upload_mzml_file", methods=["POST"])
-        def upload_mzml_file_api():
-            """Upload a mzML file via API."""
-            if 'file' not in flask.request.files:
-                return flask.jsonify({"status": "error", "message": "No file part in the request"})
-            file = flask.request.files['file']
-            if file.filename == '':
-                return flask.jsonify({"status": "error", "message": "No selected file"})
-            if not file.filename.endswith(".mzML"):
-                return flask.jsonify({"status": "error", "message": "File is not a .mzML file"})
-            filename = werkzeug.utils.secure_filename(file.filename)
-            os.makedirs(self.mzml_folder, exist_ok=True)
-            file.save(os.path.join(self.mzml_folder, filename))
-            self.available_files.append(filename)
-            return flask.jsonify({"status": "success", "message": f"File {filename} uploaded successfully"})
-        
-        @self.app.route("/api/download_mzml_file", methods=["GET"])
-        def download_mzml_file():
-            """Download a mzML file from the server."""
-            filename = flask.request.args.get("filename", type=str)
-            if not filename:
-                return flask.jsonify({"status": "error", "message": "No filename provided", "description": "Please format the URL like this: /api/download_mzml_file?filename=your_file.mzML"})
-            filepath = os.path.join(self.mzml_folder, filename)
-            if not os.path.exists(filepath):
-                return flask.jsonify({"status": "error", "message": "File does not exist", "description": "Please check the filename and try again."})
-            return flask.send_file(filepath, as_attachment=True, download_name=filename)
 
         @self.app.route("/api/queue_analysis", methods=["GET", "POST"])
         def queue_analysis():
@@ -892,10 +774,11 @@ class Webpage:
             settings_dict = self.get_settings_dict()
             filename = flask.request.args.get("filename", type=str)
             if mz is None or rt is None or filename is None:
-                return flask.jsonify({"status": "error", "message": "Missing parameters", "description": "Please provide mz, rt, and filename parameters in the URL like this: /api/queue_analysis?mz=123.456&rt=12.34&filename=your_file.mzML"})
+                return flask.jsonify({"status": "error", "message": "Missing parameters"})
             with open(self.taskstorage_filepath, "a") as f:
                 f.write(filename + "\t" + str(mz) + "\t" + str(rt) + "\t" + str(settings_dict) + "\n")
             print("Task added to task storage file")
+            self.add_webserver_log_entry(f"API task addition: Filename: {filename}, mz: {mz}, rt: {rt}")
             return flask.jsonify({"status": "success", "message": "Task added to task storage file"})
         
         @self.app.route("/api/get_status", methods=["GET"])
@@ -912,7 +795,7 @@ class Webpage:
                     cpu_temperature = "NA"
                 memory_utilization = psutil.virtual_memory().percent
                 available_memory = str(round(psutil.virtual_memory().available / (1024 * 1024 * 1024), 3)) + " GB"
-                cpu_utilization = psutil.cpu_percent(interval=0.3)                
+                cpu_utilization = psutil.cpu_percent(interval=0.3)
             except ImportError:
                 server_uptime = datetime.datetime.now() - self.start_time
                 cpu_utilization = "NA"
@@ -958,11 +841,6 @@ class Webpage:
                 "pending_analyses": pending_analyses,
             }
             return flask.jsonify(status)
-
-        @self.app.route("/api/get_settings", methods=["GET"])
-        def get_settings():
-            settings = self.get_settings_dict()
-            return flask.jsonify(settings)
 
         @self.app.route('/favicon.ico')
         def favicon():
@@ -1173,25 +1051,10 @@ class Webpage:
         self.running_processes.append(proc)
         print("Process added to running processes list")
         self.update_running_processes()
-        
-    def get_ram_usage_of_all_processes(self):
-        # Get the total RAM usage of all running processes including the webserver itself and all other subprocesses
-        total_ram_usage = 0
-        for p in self.running_processes:
-            try:
-                total_ram_usage += p.memory_info().rss  # Resident Set Size
-            except AttributeError:
-                print(f"Process {p.name} does not have memory_info() method.")
-        ram_usage_mb = total_ram_usage / (1024 * 1024)  # Convert to MB
-        try:
-            import psutil
-            ram_usage_percentage = (ram_usage_mb / psutil.virtual_memory().total) * 100
-        except Exception as e:
-            print(f"Error calculating RAM usage percentage: {e}")
-            ram_usage_percentage = 0
-        avg_ram_usage_per_process_in_mb = ram_usage_mb / len(self.running_processes) if self.running_processes else 0
-        return (ram_usage_mb, ram_usage_percentage, avg_ram_usage_per_process_in_mb)
 
+    def add_webserver_log_entry(self, log_entry):
+        with open(self.webserver_log_filepath, "a") as f:
+            f.write(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")) + "\t" + log_entry + "\n")
 
 
 
