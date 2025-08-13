@@ -13,7 +13,6 @@ def baseline_als(y, lam=1e6, p=0.01, niter=10, window_min_vals=4):
     # p: asymmetry parameter (0 < p < 1, larger values give more weight to the left side)
     # niter: number of iterations for convergence
     # Returns:
-    starttime_als = datetime.datetime.now()
     if not isinstance(window_min_vals, int):
         print("window_min_vals must be an integer!")
         try:
@@ -21,7 +20,6 @@ def baseline_als(y, lam=1e6, p=0.01, niter=10, window_min_vals=4):
         except ValueError:
             print("Setting to integer did not work. Setting to default value of 4!")
             window_min_vals = 4
-    print("Checkpoint als 1: " + str(datetime.datetime.now() - starttime_als))
     # Get rolling window minimum values
     y_mins = []
     for i in range(len(y)):
@@ -31,7 +29,6 @@ def baseline_als(y, lam=1e6, p=0.01, niter=10, window_min_vals=4):
             y_mins.append( sorted(y[i-window_min_vals:])[ int(window_min_vals*0.8)-1 ] )
         else:
             y_mins.append( sorted(y[i - window_min_vals:i + window_min_vals])[ int(window_min_vals*1.6)-1 ] )
-    print("Checkpoint als 2: " + str(datetime.datetime.now() - starttime_als))
 
     y_original = y.copy()     
     y = np.array(y_mins)
@@ -49,14 +46,12 @@ def baseline_als(y, lam=1e6, p=0.01, niter=10, window_min_vals=4):
         baseline = scipy.sparse.linalg.spsolve(Z, w * y)
         # Update weights
         w = p * (y > baseline) + (1 - p) * (y < baseline)
-    print("Checkpoint als 3: " + str(datetime.datetime.now() - starttime_als))
     for i in range(len(baseline)):
         if baseline[i] <= 0:
             baseline[i] = 0
     for i in range(len(baseline)):
         if y_original[i] - baseline[i] < 0:
             baseline[i] = y_original[i]
-    print("Baseline correction done: " + str(datetime.datetime.now() - starttime_als))
     return baseline
 
 
