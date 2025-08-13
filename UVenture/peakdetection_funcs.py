@@ -162,7 +162,6 @@ def get_peaks_with_smooth_and_bgsubst(times, intensities, min_width_seconds=2, m
     baseline = baseline_als(intensityvals, lam=1e4, p=0.05, niter=100, window_min_vals=window_size)
     corrected_intensity = intensityvals - baseline
     smoothed_intensity = do_smoothing_without_effecting_peaks(corrected_intensity, window_size=window_size)
-    print("Smoothing and bg subst done: " + str(datetime.datetime.now() - starttime))
     # Find peaks with adaptive height and width detection
     peaks, properties = scipy.signal.find_peaks(smoothed_intensity,
                                 prominence=np.std(smoothed_intensity), width=(min_width_seconds, max_width_seconds))
