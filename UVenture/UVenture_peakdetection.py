@@ -78,7 +78,7 @@ def get_all_possible_peaks(ms_file, settings_dict, mass_range=1,
 
     peak_df = pd.DataFrame(columns=["mass", "rt", "height", "area"])
     for mass in range(max_mz, min_mz-1, -mass_range):
-        xic = MS_functions.get_xic(ms_file.rawdata, mass=mass, mass_deviation=mass_range, requested_filter_mode="Full scan")
+        xic = ms_file.get_xic(mass=mass, mass_deviation=mass_range, requested_filter_mode="Full scan")
         times = np.array(xic[0])
         intensities = np.array(xic[1])
         true_indices_of_entries = np.array(xic[2])
@@ -126,7 +126,7 @@ def get_all_possible_peaks(ms_file, settings_dict, mass_range=1,
             print("Mass: " + str(row["mass"]) + " RT: " + str(row["rt"]) + " Height: " + str(row["height"]))
             xic_mass_deviation = (mass_deviation_isotopo * row["mass"]) / 1000000
             xic_mass_deviation = xic_mass_deviation * 3
-            xic = MS_functions.get_xic(ms_file.rawdata, mass=row["mass"], mass_deviation=xic_mass_deviation, requested_filter_mode="Full scan")
+            xic = ms_file.get_xic(mass=row["mass"], mass_deviation=xic_mass_deviation, requested_filter_mode="Full scan")
             times = np.array(xic[0])
             intensities = np.array(xic[1])
             true_indices_of_entries = np.array(xic[2])

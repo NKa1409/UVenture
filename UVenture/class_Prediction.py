@@ -89,7 +89,7 @@ class Prediction:
         self.make_op_log_entry("INFO:\t" + "Intensity of the molecular ion: " + str(self.intensity_of_ion))
         self.make_op_log_entry("INFO:\t" + "Assuming a mass deviation of: " + str(self.kwargs["mass_deviation"]))
         print("Intensity of ion for prediction: " + str(self.intensity_of_ion))
-        self.xic = MS_functions.get_xic(self.ms_file.rawdata, self.mass, ((self.kwargs["mass_deviation"]*self.mass)/1000000), requested_filter_mode=self.spec.filter_mode)
+        self.xic = self.ms_file.get_xic(self.mass, ((self.kwargs["mass_deviation"]*self.mass)/1000000), requested_filter_mode=self.spec.filter_mode)
         self.make_op_log_entry("INFO:\t" + "XIC calculated.")
         self.identified_peaks_for_mass = MS_functions.get_peaks_in_xy_series(self.xic[0], self.xic[1], sg_window=10, sg_order=3)
         self.make_op_log_entry("INFO:\t" + "Number of peaks found in XIC: " + str(len(self.identified_peaks_for_mass)))
@@ -480,7 +480,7 @@ class Prediction:
                 if list(simulated_isotopo_abundances_dict.keys()).index(isotopo_masse) == 0:
                     continue
                 mass_deviation_for_xic = ((self.kwargs["mass_deviation"] * isotopo_masse)/1000000)
-                isotopo_xic = MS_functions.get_xic(self.ms_file.rawdata, isotopo_masse, mass_deviation_for_xic, requested_filter_mode=self.spec.filter_mode)
+                isotopo_xic = self.ms_file.get_xic(isotopo_masse, mass_deviation_for_xic, requested_filter_mode=self.spec.filter_mode)
                 area, peak1_rt, peakintensity1, peak2_rt, peakintensity2 = MS_functions.compare_peak_shape_similarity(mi_xic, isotopo_xic, self.rt, debug_output=self.debug_output)
                 break_formula_evaluation = False
                 if area < 0:

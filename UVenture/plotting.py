@@ -313,7 +313,7 @@ def create_oa_summary_plot(oa_summary_object, true_fragment_list, best_frag_spec
     ax[0][1].set_ylabel("intensity / a.u.")
 
     for i, ax in enumerate(frag_axs):
-        curr_xic = MS_functions.get_xic(oa_summary_object.ms_file.rawdata, frag_masses[i], round(((oa_summary_object.kwargs["mass_deviation"]*oa_summary_object.mass) / 1000000), 4), requested_filter_mode=oa_summary_object.best_frag_spec.filter_mode)
+        curr_xic = oa_summary_object.ms_file.get_xic(frag_masses[i], round(((oa_summary_object.kwargs["mass_deviation"]*oa_summary_object.mass) / 1000000), 4), requested_filter_mode=oa_summary_object.best_frag_spec.filter_mode)
         observed_window_width = (max(oa_summary_object.ms_file.rt_list) / len(oa_summary_object.ms_file.rt_list)) * 20
         ax.bar(oa_summary_object.ms_file.rt_list[peak_index], max(curr_xic[1]), color="red", label="observed time", alpha=0.5, width=observed_window_width)
         ax.plot(curr_xic[0], curr_xic[1], color="blue", label="XIC " + str(round(frag_masses[i], 4)))

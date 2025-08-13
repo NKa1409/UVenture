@@ -104,7 +104,7 @@ class OneAnalysis:
         self.make_oa_log_entry("INFO:\t" + "Assuming a charge of the measured mass of: " + str(self.kwargs["charge_of_measured_mass"]))
         self.make_oa_log_entry("INFO:\t" + "Available MS modes: " + str(self.ms_file.available_modes))
 
-        self.xic = MS_functions.get_xic(self.ms_file.rawdata, self.mass, round(((self.kwargs["mass_deviation"]*self.mass) / 1000000), 4), requested_filter_mode=self.kwargs["oa_xic_requested_filter_mode"])
+        self.xic = self.ms_file.get_xic(self.mass, round(((self.kwargs["mass_deviation"]*self.mass) / 1000000), 4), requested_filter_mode=self.kwargs["oa_xic_requested_filter_mode"])
         self.make_oa_log_entry("INFO:\t" + "XIC calculated. Continuing...")
 
         self.make_oa_log_entry("INFO:\t" + "Adjusting retention time....")
@@ -835,7 +835,7 @@ class OneAnalysis:
             try:
                 if self.kwargs["oa_fragments_do_good_peak_comparison_with_area_between_curves"]:
                     os.makedirs(os.path.join(self.kwargs["one_analysis_folder"], "predictions", "fragments", "peak_matching"), exist_ok=True)
-                    fragment_xic = MS_functions.get_xic(self.ms_file.rawdata, frag_mass, round(((self.kwargs["mass_deviation"]*self.mass) / 1000000), 4), requested_filter_mode=self.best_frag_spec.filter_mode)
+                    fragment_xic = self.ms_file.get_xic(frag_mass, round(((self.kwargs["mass_deviation"]*self.mass) / 1000000), 4), requested_filter_mode=self.best_frag_spec.filter_mode)
 
                     print("Fragment mass:   " + str(frag_mass))
 
