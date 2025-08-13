@@ -115,6 +115,44 @@ class MS_File:
                 self.do_background_subtraction(background_range=(3, 10), multiplicator=3, bckg_m_dev=0.00001)
                 self.save_ms_file_log_entry("INFO:\t" + "Finished background subtraction...")
                 if self.debug_output: print("Finished background subtraction in: " + str(datetime.datetime.now() - starttime)) 
+    
+    def get_xic(self, mass, mass_deviation, requested_filter_mode="Full scan"):
+        # The mass deviation is defined as the requested mass +1x the mass deviation and -1x the mass deviation.
+        # The mass deviation is given in Da (Dalton), and NOT in PPM!!
+        # If the requested mass is 1000 and the mass deviation is 0.005, the range is 999.995 to 1000.005.
+        if (not requested_filter_mode == "Full scan") and (not requested_filter_mode == "AIF") and (not requested_filter_mode == "MS/MS"):
+            requested_filter_mode = "Full scan"
+        rt_list = []
+        for element in self.rawdata:
+            rt_list.append(element["scanList"]["scan"][0]["scan time"])
+        intensity_list = []
+        index_with_wrong_ms_level_list = []
+        for entry in self.rawdata:
+            filter = entry["scanList"]["scan"][0]["filter string"]
+            filter_mode = ""
+            if (" d " in filter) and ("@hcd" in filter):
+                filter_mode = "MS/MS"
+            if (not " d " in filter) and (not "hcd" in filter):
+                filter_mode = "Full scan"
+            if (not " d " in filter) and ("hcd" in filter):
+                filter_mode = "AIF"
+            if not filter_mode == requested_filter_mode:
+                index_with_wrong_ms_level_list.append(self.rawdata.index(entry))
+            mass_indices = (i for i in range(len((entry["m/z array"]))) if mass-mass_deviation <= entry["m/z array"][i] <= mass+mass_deviation)
+            try:
+                curr_sum_int = 0
+                for mass_index in mass_indices:
+                    curr_sum_int = curr_sum_int + entry["intensity array"][mass_index]
+                intensity_list.append(curr_sum_int)
+            except:
+                intensity_list.append(0)
+        original_index_list = list(range(len(self.rawdata)))
+        if not requested_filter_mode == "all":
+            for index in sorted(index_with_wrong_ms_level_list, reverse=True):
+                del rt_list[index]
+                del intensity_list[index]
+                del original_index_list[index]
+        return [rt_list, intensity_list, original_index_list]
 
     def extract_key_value_pairs(self, d, parent_key=''):
         items = []
