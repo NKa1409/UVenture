@@ -61,5 +61,4 @@ oa_include_frag_intensity_noise_multiplier=1e-05
 oa_reject_formula_if_score_lower_than=10.0
 oa_make_good_fragment_formula_prediction=True
 oa_zip_folder_when_finished=True
-oa_only_keep_oa_summary=False
-
+create_2d_spec_of_ms_file=False
