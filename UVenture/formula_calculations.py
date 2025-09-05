@@ -68,51 +68,46 @@ def calculate_likelyhood_of_formula_dict(f_dict, charge_of_measured_mass=None, s
         # X/C ratio check from #https://pmc.ncbi.nlm.nih.gov/articles/PMC1851972/ The numbers are representing 99.7% of all available molecular formulas.
         if "C" in list(f_dict.keys()):
             if (f_dict.get("H", 0) / f_dict.get("C", 0) < 0.2) or (f_dict.get("H", 0) / f_dict.get("C", 0) > 3.1):
-                formula_likelyness = formula_likelyness -40
-            if (f_dict.get("F", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("F", 0) / f_dict.get("C", 0) > 1.5):
-                formula_likelyness = formula_likelyness - 40
+                formula_likelyness = formula_likelyness - 20
+            if (f_dict.get("F", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("F", 0) / f_dict.get("C", 0) > 3.1):
+                formula_likelyness = formula_likelyness - 20
             if (f_dict.get("Cl", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("Cl", 0) / f_dict.get("C", 0) > 0.8):
-                formula_likelyness = formula_likelyness - 40
+                formula_likelyness = formula_likelyness - 20
             if (f_dict.get("Br", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("Br", 0) / f_dict.get("C", 0) > 0.8):
-                formula_likelyness = formula_likelyness - 40
+                formula_likelyness = formula_likelyness - 20
             if (f_dict.get("N", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("N", 0) / f_dict.get("C", 0) > 1.3):
-                formula_likelyness = formula_likelyness - 40
-            if (f_dict.get("O", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("O", 0) / f_dict.get("C", 0) > 3):
-                formula_likelyness = formula_likelyness - 40
-            if (f_dict.get("P", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("P", 0) / f_dict.get("C", 0) > 0.3):
-                formula_likelyness = formula_likelyness - 40
-            if (f_dict.get("S", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("S", 0) / f_dict.get("C", 0) > 0.8):
-                formula_likelyness = formula_likelyness - 40
-            if (f_dict.get("Si", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("Si", 0) / f_dict.get("C", 0) > 0.5):
-                formula_likelyness = formula_likelyness - 40
+                formula_likelyness = formula_likelyness - 20
+            if (f_dict.get("O", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("O", 0) / f_dict.get("C", 0) > 3.5):
+                formula_likelyness = formula_likelyness - 20
+            if (f_dict.get("P", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("P", 0) / f_dict.get("C", 0) > 0.7):
+                formula_likelyness = formula_likelyness - 20
+            if (f_dict.get("S", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("S", 0) / f_dict.get("C", 0) > 1.1):
+                formula_likelyness = formula_likelyness - 20
+            if (f_dict.get("Si", 0) / f_dict.get("C", 0) < 0) or (f_dict.get("Si", 0) / f_dict.get("C", 0) > 1):
+                formula_likelyness = formula_likelyness - 20
 
         heteroatom_count = float(f_dict.get("O", 0)) + float(f_dict.get("N", 0)) + float(f_dict.get("S", 0)) + float(f_dict.get("P", 0))
         if heteroatom_count > 5 and f_dict.get("C", 0) <= int(heteroatom_count / 4):
             formula_likelyness = formula_likelyness - float((heteroatom_count / 4) - f_dict.get("C", 0)) * 50
 
         if ("C" in list(f_dict.keys())) and ("N" in list(f_dict.keys())):
-            if int(f_dict["N"]) > 2 and (int(f_dict["C"]) / int(f_dict["N"]) <= 4):
+            if int(f_dict["N"]) > 2 and (int(f_dict["C"]) / int(f_dict["N"]) <= 2):
                 formula_likelyness = formula_likelyness - ((float(f_dict["N"]) - 2) ** 2) * 50
 
         if ("C" in list(f_dict.keys())) and ("H" in list(f_dict.keys())):
-            if (float(f_dict["H"]) / float(f_dict["C"]) >= 2):
+            if (float(f_dict["H"]) / float(f_dict["C"]) >= 2.5):
                 formula_likelyness = formula_likelyness - (((float(f_dict["H"]) / float(f_dict["C"])) - 2) ** 3) * 50
-                formula_likelyness = formula_likelyness - ((float(f_dict.get("N", 0)) ** 2) * 50)
-                formula_likelyness = formula_likelyness - ((float(f_dict.get("N", 0)) ** 2) * 50)
 
         if ("P" in list(f_dict.keys())):
             if (float(f_dict.get("P", 0)) * 3.1) >= float(f_dict.get("O", 0)):
                 formula_likelyness = formula_likelyness - (((float(f_dict.get("P", 0)) * 3) / float(f_dict.get("O", 1))) ** 4) * 250
 
-        if 2 < f_dict.get("C", 0) < heteroatom_count:
-            formula_likelyness = formula_likelyness - ((heteroatom_count - float(f_dict.get("C", 0))) ** 2) * 50
-
         dbe = calc_dbe(f_dict)
 
-        if dbe < 0:
-            score_substract = (abs(dbe + 2) * 50) ** 3
+        if dbe < -1:
+            score_substract = (abs(dbe + 2) * 10) ** 2
         elif (dbe - f_dict.get("O", 0)) > 7:
-            score_substract = abs(dbe - f_dict.get("O", 0) - 7) * 50
+            score_substract = abs(dbe - f_dict.get("O", 0) - 7) * 10
         else:
             score_substract = 0
         if not charge_of_measured_mass == None:

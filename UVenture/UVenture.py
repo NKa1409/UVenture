@@ -72,8 +72,7 @@ class OneAnalysis:
                           "oa_reject_formula_if_score_lower_than": 10,
                           "oa_make_good_fragment_formula_prediction":False,
                           "pred_formula_cache_folder_path":"U://MyFolder//MONOTONS//Filtermessungen//Formula_Predictions//",
-                          "oa_zip_folder_when_finished": True,
-                          "oa_only_keep_oa_summary": False}
+                          "oa_zip_folder_when_finished": True}
         self.kwargs = {**default_kwargs, **kwargs}
         os.makedirs(self.kwargs["one_analysis_folder"], exist_ok=True)
 
@@ -217,9 +216,6 @@ class OneAnalysis:
         self.make_oa_log_entry("INFO:\t" + "Intensity of the ion in best molecular ion spec and best frag spec: " + str(int_in_mi) + " / " + str(int_in_frag))
         if type_of_ion == "fragment_ion" and self.kwargs["oa_stop_if_oa_given_ion_is_a_fragment"] == True:
             self.make_oa_log_entry("INFO:\t" + "Stopping the prediction for the molecular ion, as the given mass is most likely to be a fragment.")
-            if self.kwargs["oa_only_keep_oa_summary"] == True:
-                shutil.rmtree(self.kwargs["one_analysis_folder"])
-                return
             if self.kwargs["oa_zip_folder_when_finished"] == True:
                 shutil.make_archive(os.path.join(self.ms_file.parentfolder, str(round(self.mass, 5)) + "_" + str(round(self.rt, 3))), "zip", self.kwargs["one_analysis_folder"])
                 shutil.rmtree(self.kwargs["one_analysis_folder"])
@@ -229,9 +225,6 @@ class OneAnalysis:
         self.molecular_ion_prediction = self.get_molecular_ion_prediction(self.best_molecular_ion_spec)
         if self.molecular_ion_prediction.peak_found == False and self.kwargs["oa_molecular_ion_only_calc_prediction_if_molecular_ion_peak_is_found"] == True:
             self.make_oa_log_entry("INFO:\t" + "No molecular ion prediction peak found. Stopping prediction...")
-            if self.kwargs["oa_only_keep_oa_summary"] == True:
-                shutil.rmtree(self.kwargs["one_analysis_folder"])
-                return
             if self.kwargs["oa_zip_folder_when_finished"] == True:
                 shutil.make_archive(os.path.join(self.ms_file.parentfolder, str(round(self.mass, 5)) + "_" + str(round(self.rt, 3))), "zip", self.kwargs["one_analysis_folder"])
                 shutil.rmtree(self.kwargs["one_analysis_folder"])
@@ -240,9 +233,6 @@ class OneAnalysis:
         if len(list(self.summarized_molecular_ion_formula_score_dict.keys())) == 0:
             print("No molecular ion prediction could be found! Returning....")
             self.make_oa_log_entry("INFO:\t" + "No molecular ion prediction could be found! Returning.....")
-            if self.kwargs["oa_only_keep_oa_summary"] == True:
-                shutil.rmtree(self.kwargs["one_analysis_folder"])
-                return
             if self.kwargs["oa_zip_folder_when_finished"] == True:
                 shutil.make_archive(os.path.join(self.ms_file.parentfolder, str(round(self.mass, 5)) + "_" + str(round(self.rt, 3))), "zip", self.kwargs["one_analysis_folder"])
                 shutil.rmtree(self.kwargs["one_analysis_folder"])
@@ -305,10 +295,7 @@ class OneAnalysis:
         oa_txt_save_filepath = os.path.join(self.kwargs["one_analysis_folder"], "BEST_FORMULA_PREDICTION.txt")
         self.create_oa_summary_txtfile(self.true_fragment_list, self.fragment_predictions, oa_txt_save_filepath)
 
-        if self.kwargs["oa_only_keep_oa_summary"] == True:
-            shutil.rmtree(self.kwargs["one_analysis_folder"])
-            return
-        elif self.kwargs["oa_zip_folder_when_finished"] == True:
+        if self.kwargs["oa_zip_folder_when_finished"] == True:
             shutil.make_archive(os.path.join(self.ms_file.parentfolder, str(round(self.mass, 5)) + "_" + str(round(self.rt, 3))), "zip", self.kwargs["one_analysis_folder"])
             shutil.rmtree(self.kwargs["one_analysis_folder"])
 
@@ -370,11 +357,18 @@ class OneAnalysis:
                 index_after = i
                 break
         if index_before == None:
+            index_before = self.best_frag_spec.index - len(self.ms_file.available_modes)
+            if index_before <= 0:
+                index_before = 1
             print("Getting spectra before and after:")
             print(self.best_frag_spec.index)
             print(self.ms_file.all_modes[self.best_frag_spec.index])
             print(self.best_frag_spec.filter_mode)
             print(self.ms_file.all_modes)
+        if index_after == None:
+            index_after = self.best_frag_spec.index + len(self.ms_file.available_modes)
+            if index_after >= len(self.ms_file.all_modes):
+                index_after = len(self.ms_file.all_modes) - 1
         print("getting surrounding spectra:")
         print("Start index = " + str(self.best_frag_spec.index))
         print("before_index = " + str(index_before))
@@ -1004,4 +998,3 @@ class OneAnalysis:
             
 if __name__ == "__main__":
     print("This is the UVenture module. It is not meant to be run directly.")
-
