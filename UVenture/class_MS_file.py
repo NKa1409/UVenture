@@ -14,7 +14,6 @@ class MS_File:
     def __init__(self, filename=None, **kwargs):
         self.debug_output = True
         self.do_bckg_subtraction = False
-        self.get_2d_spec = True
         if filename == None:
             print("No filename provided. Cannot read MS file. Returning...")
             return
@@ -25,9 +24,12 @@ class MS_File:
                 parentfolder = os.path.normpath( str(".".join(filename.split(".")[:-1])))
             default_kwargs = {"parentfolder_msfile": parentfolder,
                               "logfile_filepath": os.path.join(parentfolder, "MSfile_logfile.txt"),
-                              "msfile_raw_file_retention_time_unit": "sec"}
+                              "msfile_raw_file_retention_time_unit": "sec",
+                              "create_2d_spec_of_ms_file": False}
             self.kwargs = {**default_kwargs, **kwargs}
             os.makedirs(self.kwargs["parentfolder_msfile"], exist_ok=True)
+
+            self.get_2d_spec = self.kwargs.get("create_2d_spec_of_ms_file", False)
 
             self.parentfolder = self.kwargs["parentfolder_msfile"]
             self.filename = filename
