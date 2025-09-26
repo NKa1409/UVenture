@@ -1,9 +1,11 @@
 import ast
 import base64
+import ctypes
 import datetime
 import hashlib
 import io
 import os
+import platform
 import shutil
 import signal
 import sys
@@ -927,6 +929,45 @@ class Webpage:
         print("Background task checking started")
         return
 
+    def get_memory_windows(self):
+        class MEMORYSTATUSEX(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_ulong),
+                ("dwMemoryLoad", ctypes.c_ulong),
+                ("ullTotalPhys", ctypes.c_ulonglong),
+                ("ullAvailPhys", ctypes.c_ulonglong),
+                ("ullTotalPageFile", ctypes.c_ulonglong),
+                ("ullAvailPageFile", ctypes.c_ulonglong),
+                ("ullTotalVirtual", ctypes.c_ulonglong),
+                ("ullAvailVirtual", ctypes.c_ulonglong),
+                ("sullAvailExtendedVirtual", ctypes.c_ulonglong),
+            ]
+        stat = MEMORYSTATUSEX()
+        stat.dwLength = ctypes.sizeof(stat)
+        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+        return stat.ullTotalPhys, stat.ullAvailPhys
+    
+    def get_memory_linux(self):
+        meminfo = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                parts = line.split(":")
+                key = parts[0]
+                value = parts[1].strip().split()[0]
+                meminfo[key] = int(value)  # in kB
+        total = meminfo.get("MemTotal", 0) * 1024
+        free = (meminfo.get("MemFree", 0) + meminfo.get("Buffers", 0) + meminfo.get("Cached", 0)) * 1024
+        return total, free
+    
+    def get_memory(self):
+        # Returns total, available memory in bytes
+        if platform.system() == "Windows":
+            return self.get_memory_windows()
+        elif platform.system() == "Linux":
+            return self.get_memory_linux()
+        else:
+            raise Exception("Unsupported platform: " + platform.system())
+
     def check_and_load_new_task(self):
         settings_dict = self.get_settings_dict()
         core_count = self.num_cores_to_use
@@ -956,9 +997,20 @@ class Webpage:
             if len(lines) == 0:
                 #print("No tasks to load")
                 return datetime.datetime.now()
-            
+
             try:
                 ms_filepath = os.path.join(self.mzml_folder, lines[0].split("\t")[0])
+                total_ram, available_ram = self.get_memory()
+                print("Total RAM: " + str(round(total_ram / (1024 * 1024 * 1024), 3)) + " GB")
+                print("Available RAM: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")
+                size_msfile = os.path.getsize(ms_filepath)
+                if available_ram <= ((2*size_msfile) + 400*1024*1024) or (available_ram / total_ram) < 0.12:
+                    if len(running_analyses) > 1:
+                        print("Not enough RAM available to load new task. Needed: " + str(round((2*size_msfile + 200*1024*1024) / (1024 * 1024 * 1024), 3)) + " GB, Available: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")
+                        return datetime.datetime.now()
+                    else:
+                        print("Only one process running. Proceeding to load new task despite low RAM. Needed: " + str(round((2*size_msfile + 200*1024*1024) / (1024 * 1024 * 1024), 3)) + " GB, Available: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")
+
                 parentfolder_msfile = os.path.join(self.results_folder, str(".".join(lines[0].split("\t")[0].split(".")[:-1])))
                 mz = lines[0].split("\t")[1]
                 mz = mz.replace(",", ".")
