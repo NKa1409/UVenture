@@ -117,6 +117,7 @@ class MS_File:
                 self.do_background_subtraction(background_range=(3, 10), multiplicator=3, bckg_m_dev=0.00001)
                 self.save_ms_file_log_entry("INFO:\t" + "Finished background subtraction...")
                 if self.debug_output: print("Finished background subtraction in: " + str(datetime.datetime.now() - starttime)) 
+            if self.debug_output: print("Finished reading MS file")
     
     def get_xic(self, mass, mass_deviation, requested_filter_mode="Full scan"):
         # The mass deviation is defined as the requested mass +1x the mass deviation and -1x the mass deviation.

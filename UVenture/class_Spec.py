@@ -9,6 +9,7 @@ import UVenture.MS_functions as MS_functions
 
 class Spec:
     def __init__(self, ms_file, index, debug_output=False, **kwargs):
+        # The index that is given here is the index of all the spectra in the rawdata list. It does not matter if it is MS1 or MS2.
         self.debug_output = debug_output
         self.original_index = index
         self.ms_file = ms_file
@@ -179,3 +180,31 @@ class Spec:
         self.spec_rawdata = self.ms_file.rawdata[index]
         self.ms_level = self.ms_file.rawdata[index]["ms level"]
         return dict(zip(masses, intensities))
+    
+
+
+
+
+
+
+
+
+
+
+
+def get_index_of_spectrum_closest_to_rt(ms_file, target_rt, debug_output=False):
+    # MS file is the class MS_file object
+    # This function returns the index of the spectrum that is closest to the target_rt.
+    # It does not matter if it is MS1 or MS2.
+    # If you dont know the index of the spectrum, e.g. because you memorize a RT vale by heart, you can use this function to find the index.
+    if debug_output:
+        print("Searching for spectrum closest to RT: " + str(target_rt))
+    closest_index = None
+    closest_rt = None
+    for i, rt in enumerate(ms_file.rt_list):
+        if closest_rt is None or abs(rt - target_rt) < abs(closest_rt - target_rt):
+            closest_rt = rt
+            closest_index = i
+    if debug_output:
+        print("Found spectrum at index: " + str(closest_index) + " with RT: " + str(closest_rt))
+    return closest_index
