@@ -102,13 +102,14 @@ Future updates are planned to include:
 - [x] Improve batch processing capabilities. Allow to schedule multiple tasks/analyses.
 - [x] Bug fix: File browser
 - [x] Add estimation for total runtime
-- [ ] Check RAM usage and prevent from using over 90% of the RAM
+- [x] Check RAM usage and prevent from using over 90% of the RAM
+- [ ] Add a timeout for processes. If a process takes longer than x minutes (end it / start an additional one / stop it and add peak to peaklist again). 
 - [ ] Add file converter to .mzML format (msconvert.exe).
 - [ ] Automatic peak detection.
   - [x] Smoothing / Background subtraction of XIC
   - [x] Detection of peaks (RT, FWHM, exact mass, mass deviation)  
   - [ ] Detection of the type of ion. Either precursor ion or fragment ion.
-  - [ ] Deconvoluion of overlapping peaks.
+  - [x] Deconvoluion of overlapping peaks.
 - [ ] Create a database search tool to handle large numbers of individual raw files.
   - [ ] Detect peaks with a given m/z in every raw file (create XIC). E.g. see if PFOA can be found in the samples.
   - [ ] Calculate sum formula and fragments of every peak for the given m/z value, for every raw file. Are it just isomers or completely different molecules.
