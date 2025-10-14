@@ -1,4 +1,6 @@
 # MS_functions.py
+import copy
+import math
 import sys
 import traceback
 import similaritymeasures
@@ -6,6 +8,7 @@ import scipy
 import numpy as np
 from pyteomics import mzml
 import pandas as pd
+import UVenture.GaussianCompressor as GaussianCompressor
 
 
 
@@ -53,64 +56,241 @@ def get_xic(f, mass, mass_deviation, requested_filter_mode="Full scan"):
     return [rt_list, intensity_list, original_index_list]
 
 
-def compare_peak_shape_similarity(xic1, xic2, peak_rt, peakwidth=10, debug_output=False):
+def _odd_below(n):
+    return n-1 if n % 2 == 0 else n
+
+def _gaussian_overlap(mu1, s1, mu2, s2):
+    # Closed-form overlap of two normalized Gaussians (0..1)
+    num = math.sqrt(2*s1*s2/(s1*s1 + s2*s2))
+    den = 4*(s1*s1 + s2*s2)
+    return num * math.exp(-((mu1 - mu2)**2)/den)
+   
+def compare_peak_shape_similarity_Gauss(xic1_original, xic2_original, peak_rt, peakwidth=10, debug_output=False):
+    import copy
+    import numpy as np
+    from scipy.signal import savgol_filter, find_peaks, peak_widths
+    from scipy.optimize import curve_fit
+
+    # ----------------- helpers -----------------
+    def _odd(n): 
+        n = int(n)
+        return n if n % 2 == 1 else max(1, n-1)
+
+    def _smooth_nonneg(y, win, order=2):
+        y = np.asarray(y, float)
+        if len(y) >= 5 and win >= 3:
+            win = min(_odd(len(y)-1), max(_odd(order+3), _odd(win)))
+            ys = savgol_filter(y, win, order, mode="nearest")
+        else:
+            ys = y.copy()
+        ys[ys < 0] = 0.0
+        return ys
+
+    def _idx_near(t, target):
+        return int(np.argmin(np.abs(t - target)))
+
+    def _cut_by_index(t, y, idx, halfw):
+        L = max(0, idx - halfw)
+        R = min(len(t) - 1, idx + halfw)
+        return t[L:R+1], y[L:R+1]
+
+    # Gaussian and mixture
+    def _gauss(t, A, mu, sigma):
+        s = max(float(sigma), 1e-12)
+        return float(A) * np.exp(-0.5 * ((t - float(mu)) / s) ** 2)
+
+    def _gmix(t, *p):
+        b = p[0]
+        k = (len(p) - 1) // 3
+        y = np.full_like(t, b, dtype=float)
+        for i in range(k):
+            A, mu, s = p[1 + 3*i : 1 + 3*(i+1)]
+            y += _gauss(t, A, mu, s)
+        return y
+
+    def _init_gmm(tw, yw, kmax=3):
+        b0 = float(np.percentile(yw, 5)) if len(yw) else 0.0
+        ywb = yw - b0
+        ywb[ywb < 0] = 0.0
+
+        prom = 0.05 * (np.max(ywb) if len(ywb) and np.max(ywb) > 0 else 1.0)
+        if len(ywb) >= 3:
+            peaks, _ = find_peaks(ywb, prominence=prom)
+        else:
+            peaks = np.array([], dtype=int)
+        if len(peaks) == 0:
+            peaks = np.array([int(np.argmax(ywb))])
+
+        order = np.argsort(ywb[peaks])[::-1][:kmax]
+        peaks = peaks[order]
+
+        widths_pts = peak_widths(ywb, peaks, rel_height=0.5)[0] if len(peaks) else np.array([max(3, len(ywb)//10)])
+        dt = np.median(np.diff(tw)) if len(tw) > 1 else 1.0
+
+        p0 = [b0]; lo = [0.0]; hi = [np.inf]
+        for i, pk in enumerate(peaks):
+            A = float(max(ywb[pk], 1e-6))
+            mu = float(tw[pk])
+            w = widths_pts[i] if i < len(widths_pts) else max(3, len(ywb)//10)
+            sigma = float((w * dt) / (2.0 * np.sqrt(2.0 * np.log(2.0))))
+            sigma = max(sigma, 0.5 * dt)
+            p0 += [A, mu, sigma]
+            lo += [0.0, tw[0], 0.25 * dt]
+            hi += [np.inf, tw[-1], max(1e3*dt, tw[-1]-tw[0])]
+        return np.array(p0, float), (np.array(lo, float), np.array(hi, float))
+
+    def _fit_gmm(tw, yw, kmax=3):
+        if len(tw) < 3:
+            return np.array([0.0, np.max(yw) if len(yw) else 0.0, float(tw[len(tw)//2]) if len(tw) else 0.0, 1.0]), 1
+        p0, bounds = _init_gmm(tw, yw, kmax=kmax)
+        try:
+            popt, _ = curve_fit(_gmix, tw, yw, p0=p0, bounds=bounds, maxfev=20000)
+        except Exception:
+            p0, bounds = _init_gmm(tw, yw, kmax=1)
+            try:
+                popt, _ = curve_fit(_gmix, tw, yw, p0=p0, bounds=bounds, maxfev=20000)
+            except Exception:
+                popt = p0
+        k = (len(popt) - 1) // 3
+        return popt, k
+
+    def _select_component(popt, peak_rt):
+        k = (len(popt) - 1) // 3
+        mus = np.array([popt[1 + 3*i + 1] for i in range(k)], float)
+        idx = int(np.argmin(np.abs(mus - peak_rt)))
+        A = float(popt[1 + 3*idx + 0])
+        mu = float(popt[1 + 3*idx + 1])
+        s  = float(max(popt[1 + 3*idx + 2], 1e-12))
+        return A, mu, s
+
+    def _shapes_on_common_axis(mu1, s1, mu2, s2, span=4.0, N=201, shift_grid=0.5):
+        """
+        Common normalized axis x in [-1,1] mapped to RT via mu1 and max(s1,s2).
+        Returns the area-minimizing pair by allowing a small mu2 shift.
+        """
+        x = np.linspace(-1.0, 1.0, N)
+        scale = span * max(s1, s2)
+        rt = mu1 + x * scale
+
+        # try small shifts on mu2 to absorb tiny RT drift
+        deltas = np.linspace(-shift_grid*s1, shift_grid*s1, 9)
+        best = (np.inf, rt, None, None)
+        for d in deltas:
+            y1 = np.exp(-0.5 * ((rt - mu1) / s1) ** 2)
+            y2 = np.exp(-0.5 * ((rt - (mu2 + d)) / s2) ** 2)
+            y1 /= max(np.max(y1), 1e-12)
+            y2 /= max(np.max(y2), 1e-12)
+            area = float(np.trapz(np.abs(y1 - y2), x))  # dimensionless
+            if area < best[0]:
+                best = (area, rt, y1, y2)
+        return best  # area, rt_grid, y1, y2
+
+    # ----------------- main -----------------
+    xic1 = copy.deepcopy(xic1_original)
+    xic2 = copy.deepcopy(xic2_original)
+    t1, y1 = np.asarray(xic1[0], float), np.asarray(xic1[1], float)
+    t2, y2 = np.asarray(xic2[0], float), np.asarray(xic2[1], float)
+
+    idx1 = _idx_near(t1, peak_rt)
+    idx2 = _idx_near(t2, peak_rt)
+
+    sg_win = _odd(2*int(peakwidth)+1)
+    y1s = _smooth_nonneg(y1, sg_win, order=2)
+    y2s = _smooth_nonneg(y2, sg_win, order=2)
+
+    t1w, y1w = _cut_by_index(t1, y1s, idx1, int(peakwidth))
+    t2w, y2w = _cut_by_index(t2, y2s, idx2, int(peakwidth))
+
+    # baseline to >=0 for fitting
+    if len(y1w): y1w = y1w - np.min(y1w); y1w[y1w < 0] = 0.0
+    if len(y2w): y2w = y2w - np.min(y2w); y2w[y2w < 0] = 0.0
+
+    popt1, _ = _fit_gmm(t1w, y1w, kmax=3)
+    popt2, _ = _fit_gmm(t2w, y2w, kmax=3)
+
+    A1, mu1, s1 = _select_component(popt1, peak_rt)
+    A2, mu2, s2 = _select_component(popt2, peak_rt)
+
+    # evaluate both components on a common axis tied to the reference component
+    area, rt_grid, y1c, y2c = _shapes_on_common_axis(mu1, s1, mu2, s2, span=4.0, N=201, shift_grid=0.5)
+
+    if not np.isfinite(area):
+        area = -1.0
+
+    # return arrays used for the scoring (equal length, common RT grid)
+    return float(area), list(rt_grid), list(y1c), list(rt_grid), list(y2c)
+
+def compare_peak_shape_similarity(xic1_original, xic2_original, peak_rt, peakwidth=10, debug_output=False):
+    # xic = (t, y, meta?)  ; uses t and y only
+    xic1 = copy.deepcopy(xic1_original)
+    xic2 = copy.deepcopy(xic2_original)
+    t1, y1 = xic1[0], xic1[1]
+    t2, y2 = xic2[0], xic2[1]
+
+    # index near target
     index = xic1[0].index(min(xic1[0], key=lambda x: abs(peak_rt - x)))
-    intensity1_at_peak_rt = xic1[1][index]
-    if intensity1_at_peak_rt <= 0:
-        intensity1_at_peak_rt = 0.000001
-    intensity2_at_peak_rt = xic2[1][index]
-    if intensity2_at_peak_rt <= 0:
-        intensity2_at_peak_rt = 0.000001
+
+    # Savitzky-Golay (ensure odd window and within bounds)
+    sg_order = 2
+    sg_window = max(5, 2*max(1, peakwidth//2)+1)
+    sg_window = min(_odd_below(len(y1)), sg_window)
+    sg_window = max(sg_order+2 | 1, sg_window)  # ensure >= order+2 and odd
+    y1s = scipy.signal.savgol_filter(y1, sg_window, sg_order, mode="nearest")
+    y2s = scipy.signal.savgol_filter(y2, sg_window, sg_order, mode="nearest")
+    y1s = [y if y>0 else 0 for y in y1s]
+    y2s = [y if y>0 else 0 for y in y2s]
+    xic1[1] = y1s
+    xic2[1] = y2s
+
+    # cutouts (index-based window)
+    front = max(1, index - peakwidth)
+    back  = min(len(t1)-1, index + peakwidth)
+    xic1_cutout = (t1[front:back], y1s[front:back])
+    xic2_cutout = (t2[front:back], y2s[front:back])
+    
+
+    peak1_rt = xic1_cutout[0]
+    peak2_rt = xic2_cutout[0]
+
+    intensity1_at_peak_rt = y1s[index] if y1s[index] >= 0 else 0.000001
+    intensity2_at_peak_rt = y2s[index] if y2s[index] >= 0 else 0.000001
+
     try:
-        peakintensity1 = xic1[1][(index - peakwidth):(index + peakwidth)]
-        peak1_rt = xic1[0][int(index - peakwidth):int(index + peakwidth)]
-        peakintensity2 = xic2[1][int(index - peakwidth):int(index + peakwidth)]
-        peak2_rt = xic2[0][int(index - peakwidth):int(index + peakwidth)]
-
-        neighbour_list1 = xic1[1][int(index - 3 * peakwidth):int(index + 3 * peakwidth)]
-        neighbour_list1 = [neighbour_list1[i] for i in range(len(neighbour_list1)) if (i < len(neighbour_list1) / 3) or (i > ((len(neighbour_list1) / 3) + (len(neighbour_list1) / 2)))]
-        average_surrounding1 = sum(neighbour_list1) / len(neighbour_list1)
+        min_in_window1 = min(xic1_cutout[1])
         try:
-            peakintensity1 = [((i - average_surrounding1) / (xic1[1][index] - average_surrounding1)) for i in peakintensity1]
+            peakintensity1 = [((i - min_in_window1) / (y1s[index] - min_in_window1)) for i in xic1_cutout[1]]
         except:
-            max_peakint1 = max(peakintensity1)
-            if max_peakint1 == 0:
-                max_peakint1 = 0.001
-            peakintensity1 = [((i - average_surrounding1) / (max_peakint1)) for i in peakintensity1]
+            max_peakint1 = max(xic1_cutout[1]) if not max(xic1_cutout[1]) == 0 else 0.0001
+            peakintensity1 = [((i - min_in_window1) / (max_peakint1)) for i in xic1_cutout[1]]
 
-        neighbour_list2 = xic2[1][int(index - 3 * peakwidth):int(index + 3 * peakwidth)]
-        neighbour_list2 = [neighbour_list2[i] for i in range(len(neighbour_list2)) if (i < len(neighbour_list2) / 3) or (i > ((len(neighbour_list2) / 3) + (len(neighbour_list2) / 2)))]
-        average_surrounding2 = sum(neighbour_list2) / len(neighbour_list2)
+        min_in_window2 = min(xic2_cutout[1])
         try:
-            peakintensity2 = [((i - average_surrounding2) / (xic2[1][index] - average_surrounding2)) for i in peakintensity2]
+            peakintensity2 = [((i - min_in_window2) / (y2s[index] - min_in_window2)) for i in xic2_cutout[1]]
         except:
-            max_peakint2 = max(peakintensity2)
-            if max_peakint2 == 0:
-                max_peakint2 = 0.0001
-            peakintensity2 = [[((i - average_surrounding2) / (max_peakint2)) for i in peakintensity2]]
-    except:
+            max_peakint2 = max(xic2_cutout[1]) if not max(xic2_cutout[1]) == 0 else 0.0001
+            peakintensity2 = [[((i - min_in_window2) / (max_peakint2)) for i in xic2_cutout[1]]]
+    except Exception as e:
+        print("Error: Going into except statement in compare_peak_shape_similarity in MS_functions.py because of: " + str(e))
         if index - peakwidth <= 2:
             peakwidth = index - 2
-        if index + peakwidth >= len(xic1[1]):
-            peakwidth = (len(xic1[1]) - index - 2)
-        peakintensity1 = xic1[1][(index - peakwidth):(index + peakwidth)]
+        if index + peakwidth >= len(y1s):
+            peakwidth = (len(y1s) - index - 2)
         peakintensity1 = [i / intensity1_at_peak_rt for i in peakintensity1]
         peak1_rt = xic1[0][int(index - peakwidth):int(index + peakwidth)]
-        peakintensity2 = xic2[1][int(index - peakwidth):int(index + peakwidth)]
         peakintensity2 = [i / intensity2_at_peak_rt for i in peakintensity2]
         peak2_rt = xic2[0][int(index - peakwidth):int(index + peakwidth)]
-
     try:
         P = np.array([peak1_rt, peakintensity1]).T
         Q = np.array([peak2_rt, peakintensity2]).T
         area = similaritymeasures.area_between_two_curves(P, Q)
-    except:
+    except Exception as e:
+        print("Error: Problem with similaritymeasures in MS_functions: " + str(e))
         area = -1
-
     if not (isinstance(area, float) or isinstance(area, int)):
         try:
             area = float(area)
-        except:
+        except Exception as e2:
+            print("Error: Problem with similaritymeasures in MS_functions.py. Not instance of... " + str(e2))
             area = -1
     if area == np.nan or (str(area).lower() == "nan"):
         area = -1
@@ -118,7 +298,6 @@ def compare_peak_shape_similarity(xic1, xic2, peak_rt, peakwidth=10, debug_outpu
             print("area was nan. Chaning area to: " + str(area))
 
     return area, peak1_rt, peakintensity1, peak2_rt, peakintensity2
-
 
 def get_mode_of_spec(filter_string):
     if " d " in filter_string and "@hcd" in filter_string:

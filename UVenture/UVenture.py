@@ -318,9 +318,9 @@ class OneAnalysis:
             avg_peak_maximum_index = rt_window.index(avg_peak_maximum_rt)
             avg_ints = [peak_avg_int_dict[i] for i in peak_avg_int_dict.keys()]
             avg_rts = [i for i in peak_avg_int_dict.keys()]
-
             try:
-                smooth_intensities = scipy.signal.savgol_filter(avg_ints, int(len(avg_ints) / 5), 2)
+                sg_window = int(len(avg_ints) / 5) if int(len(avg_ints) / 5) > 2 else 3
+                smooth_intensities = scipy.signal.savgol_filter(avg_ints, sg_window, 2)
             except Exception as e:
                 print("Error while smoothing intensities: " + str(e))
                 print(traceback.format_exc())
@@ -862,7 +862,11 @@ class OneAnalysis:
                         print("Frag mass cannot be a fragment. Intensity ratio does not match: " + str(ratio_in_spec))
                         #continue
 
-                    area_between_curves, peak1_rt, peakintensity1, peak2_rt, peakintensity2 = MS_functions.compare_peak_shape_similarity(xic1=self.xic, xic2=fragment_xic, peak_rt=self.rt, debug_output=True, peakwidth=10)
+                    try:
+                        area_between_curves, peak1_rt, peakintensity1, peak2_rt, peakintensity2 = MS_functions.compare_peak_shape_similarity(xic1_original=self.xic, xic2_original=fragment_xic, peak_rt=self.rt, debug_output=True, peakwidth=10)
+                    except Exception as e_peakshapesimilarity:
+                        print("Error: Exception in peak shape comparison in UVenture.py: " + str(e_peakshapesimilarity))
+                        continue
                     if area_between_curves < 0:
                         print("Error in calculating area between the two curves.")
                         print("Peakintensity1: " + str(peakintensity1))
