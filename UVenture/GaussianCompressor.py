@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 HPLC-MS chromatogram compressor using up to 10 Gaussian peaks.
 
@@ -597,3 +598,4 @@ if __name__ == "__main__":
         plt.show()
     except Exception as e:
         print("Plotting failed:", e)
+
