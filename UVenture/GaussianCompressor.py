@@ -154,6 +154,28 @@ def seed_peaks(t, y, max_peaks):
     return seeds
 
 
+def _resid_jac_vec(t: np.ndarray, y: np.ndarray, v: np.ndarray):
+    k = v.size // 3
+    A = v[0::3]
+    mu = v[1::3]
+    sigma = np.maximum(v[2::3], np.finfo(float).eps)
+
+    T = t[None, :]
+    MU = mu[:, None]
+    SG = sigma[:, None]
+
+    Z = (T - MU) / SG
+    E = np.exp(-0.5 * Z * Z)            # (k,n)
+    G = A[:, None] * E                  # (k,n)
+
+    y_hat = G.sum(axis=0)               # (n,)
+    r = y_hat - y                       # (n,)
+
+    J = np.empty((t.size, v.size), dtype=float)
+    J[:, 0::3] = E.T                    # d/dA
+    J[:, 1::3] = (G * (Z / SG)).T       # d/dmu
+    J[:, 2::3] = (G * ((Z * Z) / SG)).T # d/dsigma
+    return r, J
 
 def fit_k_gaussians(
     t: np.ndarray,
@@ -165,58 +187,50 @@ def fit_k_gaussians(
     loss: str = "soft_l1",
     f_scale: float | None = None,
 ) -> Tuple[List[PeakParams], np.ndarray]:
-    # Take the top-k seeds by amplitude as a simple heuristic
     seeds_k = sorted(seeds, key=lambda p: p.A, reverse=True)[:k]
-    # Sort by position for stable ordering
     seeds_k = sorted(seeds_k, key=lambda p: p.mu)
 
     x0 = flatten_params(seeds_k)
 
-    # Bounds: A ∈ [0, +inf), mu ∈ [t.min, t.max], sigma ∈ [min_sigma, max_sigma]
-    lower = []
-    upper = []
+    # bounds
     t_min, t_max = float(np.min(t)), float(np.max(t))
-    for _ in range(k):
-        lower.extend([0.0, t_min, min_sigma])
-        upper.extend([np.inf, t_max, max_sigma])
-    lb = np.asarray(lower)
-    ub = np.asarray(upper)
+    lb = np.tile([0.0, t_min, min_sigma], len(seeds_k)).astype(float)
+    ub = np.tile([np.inf, t_max, max_sigma], len(seeds_k)).astype(float)
 
-    # Residuals
-    def residuals(vec: np.ndarray) -> np.ndarray:
-        params = unflatten_params(vec)
-        y_hat = sum_of_gaussians(t, params)
-        return y_hat - y
-
-    # Robust scale for soft_l1
     if f_scale is None:
         f_scale = estimate_noise_sigma(y)
         if f_scale <= 0:
-            f_scale = max(1e-12, np.std(y) * 0.1)
+            f_scale = max(1e-12, float(np.std(y) * 0.1))
+
+    cache = {"x": None, "r": None, "J": None}
+
+    def _fun(v):
+        if cache["x"] is not None and np.array_equal(v, cache["x"]):
+            return cache["r"]
+        r, J = _resid_jac_vec(t, y, v)
+        cache["x"], cache["r"], cache["J"] = v.copy(), r, J
+        return r
+
+    def _jac(v):
+        if cache["x"] is not None and np.array_equal(v, cache["x"]):
+            return cache["J"]
+        r, J = _resid_jac_vec(t, y, v)
+        cache["x"], cache["r"], cache["J"] = v.copy(), r, J
+        return J
 
     res = least_squares(
-        residuals,
-        x0,
-        bounds=(lb, ub),
-        loss=loss,
-        f_scale=f_scale,
-        max_nfev=10000,
-        xtol=1e-10,
-        ftol=1e-10,
-        gtol=1e-10,
-        verbose=0,
+        _fun, x0, jac=_jac, bounds=(lb, ub),
+        loss=loss, f_scale=f_scale, method="trf",
+        max_nfev=2000, xtol=1e-8, ftol=1e-8, gtol=1e-8, verbose=0,
     )
 
     params = unflatten_params(res.x)
-    # Enforce nonnegative amplitudes explicitly to avoid tiny negatives from solver
     for p in params:
         if p.A < 0:
             p.A = 0.0
-    y_fit = sum_of_gaussians(t, params)
-    # Sort by mu for clean output
     params.sort(key=lambda p: p.mu)
+    y_fit = sum_of_gaussians_fast(t, params)
     return params, y_fit
-
 
 
 def _peak_curve(t, p):
@@ -232,46 +246,51 @@ def sum_of_gaussians_fast(t, params):
         y += _peak_curve(t, p)
     return y
 
-def choose_model(t, y, max_peaks, target_rel_area):
+def choose_model(t, y, max_peaks, target_rel_area, fit_stride=None):
     start_time = time.time()
-    seeds0 = seed_peaks(t, y, max_peaks=max_peaks)
 
-    dt = float(np.median(np.diff(t)))
-    span = float(t[-1] - t[0]) if t.size > 1 else 1.0
+    if fit_stride is None:
+        # aim for about 2000 points during solves
+        fit_stride = max(1, int(len(t) // 2000))
+    sl = slice(None, None, fit_stride)
+    t_fit = t[sl]
+    y_fit_in = y[sl]
+
+    seeds0 = seed_peaks(t_fit, y_fit_in, max_peaks=max_peaks)
+
+    dt = float(np.median(np.diff(t_fit)))
+    span = float(t_fit[-1] - t_fit[0]) if t_fit.size > 1 else 1.0
     min_sigma = max(dt, span/2000.0)
     max_sigma = max(span/3.0, min_sigma*2.0)
-    noise_scale = estimate_noise_sigma(y)
+    noise_scale = estimate_noise_sigma(y_fit_in)
 
-    rng = np.random.default_rng(42)  # reuse across loop
+    rng = np.random.default_rng(42)
     params_running, history = [], []
     best_params, best_fit, best_rel = None, None, np.inf
 
     if seeds0:
         params_running.append(sorted(seeds0, key=lambda p: p.A, reverse=True)[0])
 
-    # incremental state
-    y_fit = sum_of_gaussians_fast(t, params_running)
-    resid = y - y_fit
+    y_fit = sum_of_gaussians_fast(t_fit, params_running)
+    resid = y_fit_in - y_fit
 
     for k in range(1, max_peaks + 1):
-        print("Time taken:", str(time.time() - start_time) + " seconds for K=" + str(k) + " with rel area " + str(best_rel))
-        # ensure k seeds
+        # detect on thinned grid
         if k > len(params_running):
-            new_seed = detect_next_seed_from_residual(t, resid)
+            new_seed = detect_next_seed_from_residual(t_fit, resid)
             if new_seed is None:
                 break
             params_running.append(new_seed)
-            y_fit += _peak_curve(t, new_seed)  # O(n)
-            resid = y - y_fit
+            y_fit += _peak_curve(t_fit, new_seed)
+            resid = y_fit_in - y_fit
 
-        # adaptive multistarts, sequential with pruning
-        n_starts = 3 if k <= 3 else 2 if k <= 6 else 1
+        n_starts = 2 if k <= 3 else 1
         base = params_running
 
         def jitter_once():
             out = []
             for p in base:
-                mu_j = float(np.clip(p.mu + rng.normal(0, 0.25*max(dt, p.sigma)), t[0], t[-1]))
+                mu_j = float(np.clip(p.mu + rng.normal(0, 0.25*max(dt, p.sigma)), t_fit[0], t_fit[-1]))
                 sigma_j = float(np.clip(p.sigma * np.exp(rng.normal(0, 0.25)), min_sigma, max_sigma))
                 A_j = max(0.0, p.A * np.exp(rng.normal(0, 0.25)))
                 out.append(PeakParams(A=A_j, mu=mu_j, sigma=sigma_j))
@@ -279,150 +298,58 @@ def choose_model(t, y, max_peaks, target_rel_area):
 
         starts = [base] + [jitter_once() for _ in range(n_starts)]
 
-        best_k, best_fit_k, best_rel_k = None, None, np.inf
-
-        # evaluate base first; prune further starts if already good
+        best_k, best_fit_k_fitgrid, best_rel_k = None, None, np.inf
         for idx, st in enumerate(starts):
-            params_k, y_fit_k = fit_k_gaussians(
-                t, y, st, k=len(st),
+            params_k, y_fit_k_fitgrid = fit_k_gaussians(
+                t_fit, y_fit_in, st, k=len(st),
                 min_sigma=min_sigma, max_sigma=max_sigma,
                 loss="soft_l1", f_scale=noise_scale
             )
-            _, rel = area_error(t, y, y_fit_k)
+            # compute rel area on FULL grid once per candidate
+            y_fit_full = sum_of_gaussians_fast(t, params_k)
+            _, rel_full = area_error(t, y, y_fit_full)
 
-            if rel < best_rel_k:
-                best_rel_k, best_k, best_fit_k = rel, params_k, y_fit_k
+            if rel_full < best_rel_k:
+                best_rel_k, best_k = rel_full, params_k
+                best_fit_k_fitgrid = y_fit_k_fitgrid
 
-            # early stop if threshold reached or no improvement possible
-            if target_rel_area is not None and best_rel_k <= target_rel_area:
+            if target_rel_area is not None and rel_full <= target_rel_area:
                 break
-            # optional pruning: after checking base, require >=1% improvement to continue
-            if idx == 0 and n_starts > 0 and target_rel_area is None:
-                # if base is already close to the global best so far, skip jitter
-                if best_rel_k <= best_rel * 1.01:
-                    break
-
-        # commit best
-        params_running = best_k
-        y_fit = best_fit_k
-        resid = y - y_fit
-
-        print("Starting to calculate area error")
-        area_abs, area_rel = area_error(t, y, y_fit)
-        history.append({"k": len(params_running), "area_abs": area_abs, "area_rel": area_rel})
-
-        if area_rel < best_rel:
-            best_params, best_fit, best_rel = params_running, y_fit, area_rel
-        if target_rel_area is not None and area_rel <= target_rel_area:
-            break
-
-        # prepare next seed if budget remains
-        if len(params_running) < max_peaks:
-            new_seed = detect_next_seed_from_residual(t, resid)
-            if new_seed is not None:
-                params_running = params_running + [new_seed]
-                y_fit += _peak_curve(t, new_seed)
-                resid = y - y_fit
-
-    if best_params is None:
-        best_params, best_fit = fit_k_gaussians(t, y, seeds0[:1], 1, min_sigma, max_sigma)
-        best_rel = area_error(t, y, best_fit)[1]
-
-    info = {
-        "area_rel_best": best_rel,
-        "history": history,
-        "min_sigma": min_sigma,
-        "max_sigma": max_sigma,
-        "target_rel_area": target_rel_area,
-    }
-    return (best_params, best_fit, info)
-
-
-
-
-
-
-def __first_version_choose_model(t, y, max_peaks, target_rel_area):
-    start_time = time.time()
-    seeds0 = seed_peaks(t, y, max_peaks=max_peaks)
-    print("Initial seeds:", str(len(seeds0)) + ". After: " + str(time.time() - start_time) + " seconds")
-
-    dt = float(np.median(np.diff(t)))
-    span = float(t[-1] - t[0]) if t.size > 1 else 1.0
-    min_sigma = max(dt, span/2000.0)
-    max_sigma = max(span/3.0, min_sigma*2.0)
-    noise_scale = estimate_noise_sigma(y)
-    print("Estimated noise scale:", str(noise_scale) + ". After: " + str(time.time() - start_time) + " seconds")
-
-    params_running = []
-    history = []
-    best_params, best_fit, best_rel = None, None, np.inf
-
-    # start with strongest seed
-    if seeds0:
-        params_running.append(sorted(seeds0, key=lambda p: p.A, reverse=True)[0])
-
-
-    print("Fitting up to", str(max_peaks), "peaks with target rel area", str(target_rel_area))
-    for k in range(1, max_peaks+1):
-        if k > len(params_running):
-            y_curr = sum_of_gaussians(t, params_running) if params_running else np.zeros_like(t)
-            new_seed = detect_next_seed_from_residual(t, y - y_curr)
-            if new_seed is None:
+            if idx == 0 and n_starts > 0 and best_rel_k <= best_rel * 1.01:
                 break
-            params_running.append(new_seed)
-
-        # multistart jitters
-        starts = []
-        rng = np.random.default_rng(42)
-        base = params_running
-        for _ in range(6):
-            jittered = []
-            for p in base:
-                mu_j = float(np.clip(p.mu + rng.normal(0, 0.25*max(dt, p.sigma)), t[0], t[-1]))
-                sigma_j = float(np.clip(p.sigma * np.exp(rng.normal(0, 0.25)), min_sigma, max_sigma))
-                A_j = max(0.0, p.A * np.exp(rng.normal(0, 0.25)))
-                jittered.append(PeakParams(A=A_j, mu=mu_j, sigma=sigma_j))
-            starts.append(jittered)
-        starts.append(base)
-
-        best_k, best_fit_k, best_rel_k = None, None, np.inf
-        for st in starts:
-            params_k, y_fit_k = fit_k_gaussians(
-                t, y, st, k=len(st), min_sigma=min_sigma, max_sigma=max_sigma,
-                loss="soft_l1", f_scale=noise_scale
-            )
-            _, rel = area_error(t, y, y_fit_k)
-            if rel < best_rel_k:
-                best_rel_k, best_k, best_fit_k = rel, params_k, y_fit_k
 
         params_running = best_k
-        area_abs, area_rel = area_error(t, y, best_fit_k)
+        y_fit = best_fit_k_fitgrid
+        resid = y_fit_in - y_fit
+
+        area_abs, area_rel = area_error(t, y, sum_of_gaussians_fast(t, params_running))
         history.append({"k": len(params_running), "area_abs": area_abs, "area_rel": area_rel})
+        if len(history) >= 2 and history[-2]["area_rel"] - area_rel < 1e-4:
+            if target_rel_area is None or area_rel <= max(2*estimate_noise_sigma(y)/np.trapz(np.abs(y), t), target_rel_area):
+                break
+        
 
         if area_rel < best_rel:
-            best_params, best_fit, best_rel = params_running, best_fit_k, area_rel
+            best_params, best_fit, best_rel = params_running, sum_of_gaussians_fast(t, params_running), area_rel
         if target_rel_area is not None and area_rel <= target_rel_area:
             break
 
         if len(params_running) < max_peaks:
-            new_seed = detect_next_seed_from_residual(t, y - best_fit_k)
+            new_seed = detect_next_seed_from_residual(t_fit, resid)
             if new_seed is not None:
                 params_running = params_running + [new_seed]
-        print(f" K={k:2d}  rel_area={area_rel:.6g}. After: " + str(time.time() - start_time) + " seconds")
+                y_fit += _peak_curve(t_fit, new_seed)
+                resid = y_fit_in - y_fit
 
     if best_params is None:
-        best_params, best_fit = fit_k_gaussians(t, y, seeds0[:1], 1, min_sigma, max_sigma)
-        best_rel = area_error(t, y, best_fit)[1]
+        best_params, best_fit = fit_k_gaussians(t_fit, y_fit_in, seeds0[:1], 1, min_sigma, max_sigma)
+        best_rel = area_error(t, y, sum_of_gaussians_fast(t, best_params))[1]
 
-    info = {
-        "area_rel_best": best_rel,
-        "history": history,
-        "min_sigma": min_sigma,
-        "max_sigma": max_sigma,
-        "target_rel_area": target_rel_area,
-    }
-    return best_params, best_fit, info
+    info = {"area_rel_best": best_rel, "history": history,
+            "min_sigma": min_sigma, "max_sigma": max_sigma,
+            "target_rel_area": target_rel_area}
+    return best_params, sum_of_gaussians_fast(t, best_params), info
+
 
 
 def load_xy(path: str) -> Tuple[np.ndarray, np.ndarray]:
@@ -526,6 +453,60 @@ def main(argv: List[str] | None = None) -> int:
     return 0
 
 
+def merge_peaks_by_resolution(params: List[PeakParams], rs_thresh: float = 1.0) -> List[PeakParams]:
+    """
+    Merge adjacent Gaussians whose chromatographic resolution R_s < rs_thresh.
+    Preserves total area and matches first two moments to yield one Gaussian per cluster.
+    Returns a new list of PeakParams sorted by mu.
+    """
+    FWHM = 2.354820045
+    if not params:
+        return []
+
+    ps = sorted(params, key=lambda p: p.mu)
+
+    def _rs(p1: PeakParams, p2: PeakParams) -> float:
+        w1 = FWHM * max(p1.sigma, np.finfo(float).eps)
+        w2 = FWHM * max(p2.sigma, np.finfo(float).eps)
+        return 2.0 * abs(p2.mu - p1.mu) / (w1 + w2)
+
+    # build clusters by adjacency
+    clusters, cur = [], [ps[0]]
+    for p in ps[1:]:
+        if _rs(cur[-1], p) < rs_thresh:
+            cur.append(p)
+        else:
+            clusters.append(cur)
+            cur = [p]
+    clusters.append(cur)
+
+    out: List[PeakParams] = []
+    for cl in clusters:
+        if len(cl) == 1:
+            out.append(cl[0])
+            continue
+
+        # area weights
+        areas = np.array([p.A * max(p.sigma, np.finfo(float).eps) * np.sqrt(2*np.pi) for p in cl], dtype=float)
+        Atot = float(areas.sum())
+        if Atot <= 0:
+            out.append(max(cl, key=lambda p: p.A))
+            continue
+
+        mus = np.array([p.mu for p in cl], dtype=float)
+        sig2 = np.array([p.sigma**2 for p in cl], dtype=float)
+        w = areas / Atot
+
+        mu_bar = float(np.sum(w * mus))
+        var_bar = float(np.sum(w * (sig2 + (mus - mu_bar)**2)))
+        sigma_bar = float(np.sqrt(max(var_bar, np.finfo(float).eps)))
+        A_eff = Atot / (sigma_bar * np.sqrt(2*np.pi))  # area-preserving
+
+        out.append(PeakParams(A=float(A_eff), mu=mu_bar, sigma=sigma_bar))
+
+    return out
+
+
 def get_peaks_in_chromatogram(timevals, intensityvals, max_peaks=50, target_rel_area=2e-7):
     t = np.asarray(timevals, dtype=float)
     y = np.asarray(intensityvals, dtype=float)
@@ -545,6 +526,7 @@ def get_peaks_in_chromatogram(timevals, intensityvals, max_peaks=50, target_rel_
 
     print("Fitting up to", max_peaks, "peaks with target rel area", target)
     params, y_fit, info = choose_model(t, y, max_peaks=max_peaks, target_rel_area=target)
+    params = merge_peaks_by_resolution(params)
 
     params_list = []
     for p in params:
@@ -556,7 +538,7 @@ def get_peaks_in_chromatogram(timevals, intensityvals, max_peaks=50, target_rel_
 if __name__ == "__main__":
     # Direct usage without CLI args
     # Set your input path
-    path = "test_chromatogram.csv"
+    path = "test_chromatogram.txt"
     t, y = load_xy(path)
 
     # Fit up to 10 peaks and stop when target normalized area error is reached
@@ -567,10 +549,17 @@ if __name__ == "__main__":
         print(f"  Peak {i}: A={p.A:.6g}, mu={p.mu:.6g}, sigma={p.sigma:.6g}")
     print()
 
+    # Combine individual params if there are multiple gauss peaks for a single retention time:
+    params = merge_peaks_by_resolution(params)
+    print("Fitted parameters:")
+    for i, p in enumerate(params, 1):
+        print(f"  Peak {i}: A={p.A:.6g}, mu={p.mu:.6g}, sigma={p.sigma:.6g}")
+    print()
+
     # Remove gaussian peaks that are too small or too wide
     print(len(params), "peaks before filtering")
     abs_duration_of_timeseries = t[-1] - t[0]
-    params = [p for p in params if p.A > 5e6 and p.sigma < abs_duration_of_timeseries/4.0]
+    #params = [p for p in params if p.A > 5e6 and p.sigma < abs_duration_of_timeseries/4.0]
     print(len(params), "peaks after filtering")
     
     # Save compact outputs

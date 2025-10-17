@@ -71,7 +71,7 @@ def remove_duplicates_from_peak_df(peak_df, rt_bins=100, mass_deviation_ppm=15):
 
 def dedupe_peaks(peaks, dm=0.001, drt=3.0, keep="max_area"):
     """
-    peaks: list of (mass, rt, area, height)
+    peaks: list of (mass, rt, area, height, additional_info)
     dm: mass tolerance (±)
     drt: rt tolerance (±)
     keep: "first" | "max_area" | "max_height"
@@ -79,11 +79,18 @@ def dedupe_peaks(peaks, dm=0.001, drt=3.0, keep="max_area"):
     if not peaks:
         return []
 
-    peaks = np.asarray(peaks, dtype=float)
-    m = peaks[:, 0]
-    rt = peaks[:, 1]
-    area = peaks[:, 2]
-    height = peaks[:, 3]
+    # keep strings intact
+    peaks = np.array(peaks, dtype=object)
+
+    # numeric columns → float
+    m      = peaks[:, 0].astype(float)
+    rt     = peaks[:, 1].astype(float)
+    area   = peaks[:, 2].astype(float)
+    height = peaks[:, 3].astype(float)
+
+    # string column stays string
+    additional_info = peaks[:, 4].astype(str)
+
     n = len(peaks)
 
     # Disjoint set
@@ -254,7 +261,7 @@ class FindPeaks:
         self.min_mz = int(min_mz)
         self.max_mz = int(max_mz)
 
-        self.peak_df = pd.DataFrame(columns=["mass", "rt", "height", "area"])
+        self.peak_df = pd.DataFrame(columns=["mass", "rt", "height", "area", "additional_info"])
 
         for mass in range(self.max_mz, self.min_mz-1, -self.mass_range):
             print("Processing mass: " + str(mass))
@@ -263,9 +270,20 @@ class FindPeaks:
             intensities = np.array(xic[1])
             true_indices_of_entries = np.array(xic[2])
 
-            peak_areas_gaussian_compressor = self.get_peaks_gaussian_compressor(mass, times, intensities)
+            try:
+                peak_areas_gaussian_compressor = self.get_peaks_gaussian_compressor(mass, times, intensities)
+                peak_areas_gaussian_compressor = [(p[0], p[1], p[2], p[3], "gaussian_compressor") for p in peak_areas_gaussian_compressor]
+            except Exception as egaussian:
+                print("Error in UVenture_peakdetection. Calculating peaks with gausian compressor: " + str(egaussian))
+                peak_areas_gaussian_compressor = []
 
-            peak_areas_scipy_method = self.get_peaks_scipy_method(mass, times, intensities, true_indices_of_entries)
+
+            try:
+                peak_areas_scipy_method = self.get_peaks_scipy_method(mass, times, intensities, true_indices_of_entries)
+                peak_areas_scipy_method = [(p[0], p[1], p[2], p[3], "scipy_method") for p in peak_areas_scipy_method]
+            except Exception as escipy:
+                print("Error in UVenture_peakdetection. Calculating peaks with scipy method: " + str(escipy))
+                peak_areas_scipy_method = []
 
             peak_areas = peak_areas_scipy_method + peak_areas_gaussian_compressor
 
@@ -276,7 +294,7 @@ class FindPeaks:
             # Add the peak areas to the DataFrame
             print("Adding peak areas to DataFrame.")
             if len(peak_areas) > 0:
-                new_peak_df = pd.DataFrame(peak_areas, columns=["mass", "rt", "height", "area"])
+                new_peak_df = pd.DataFrame(peak_areas, columns=["mass", "rt", "height", "area", "additional_info"])
                 if len(self.peak_df) >= 1:
                     self.peak_df = pd.concat([self.peak_df, new_peak_df], ignore_index=True)
                 elif len(self.peak_df) == 0:
@@ -288,9 +306,9 @@ class FindPeaks:
             # Remove duplicates
             #print("Peak df before removing duplicates: " + str(peak_df))
             print("Length of peak df before removing duplicates: " + str(len(self.peak_df)))
-            peak_areas_list = self.peak_df[["mass", "rt", "height", "area"]].values.tolist()
+            peak_areas_list = self.peak_df[["mass", "rt", "height", "area", "additional_info"]].values.tolist()
             peak_areas_list = self.remove_duplicates_in_peak_areas(mass, peak_areas_list)
-            self.peak_df = pd.DataFrame(peak_areas_list, columns=["mass", "rt", "height", "area"])
+            self.peak_df = pd.DataFrame(peak_areas_list, columns=["mass", "rt", "height", "area", "additional_info"])
             print("Length of peak df after removing duplicates: " + str(len(self.peak_df)))
 
 
@@ -309,35 +327,26 @@ class FindPeaks:
                     print("Skipping mass: " + str(row["mass"]) + " because it is not >= " + str(mass +5))
                     continue
 
-                #Check if a peak exists at row["rt"]
-                peak_exists, properties = self.check_if_peak_exists(self.ms_file, row["mass"], row["rt"])
-                peakheight = properties[2] if peak_exists else 0
-                peakarea = properties[3] if peak_exists else 0
+                peakarea = row["area"] # Those are probably not the correct areas and heights, as the area/height was calculated from an xic with 1 amu resolution.
+                peakheight = row["height"]
+                additional_info = row["additional_info"]
                 new_peak_df = new_peak_df.drop(index)
 
-
-                if peak_exists == False:
-                    print("No peak found for mass: " + str(row["mass"]) + " RT: " + str(row["rt"]))
+                print("Peak found for mass: " + str(row["mass"]) + " RT: " + str(row["rt"]))
+                if not peaklist_filename == "":
+                    # Save the peak to the peaklist file
+                    with open(peaklist_filename, "a") as f:
+                        f.write(f"{row['mass']}\t{row['rt']}\t{round(peakarea, 2)}\t{round(peakheight, 2)}\t{additional_info}\n")
+                    print("Peak saved to peaklist: " + str(peaklist_filename) + ".")
+                if not mzrt_filename == "":
+                    # Save the peak to the mzrt file to be processed directly
+                    with open(mzrt_filename, "a") as f:
+                        file = os.path.normpath(ms_file.filename)
+                        file = file.split(os.sep)[-1]
+                        print("Taskstorage file: " + str(file))
+                        f.write(f"{file}\t{row['mass']}\t{row['rt']}\t{settings_dict}\n")
+                        print("Peak saved to mzrt file: " + str(mzrt_filename) + ".")
                     continue
-                elif peakheight < self.threshold_intensity:
-                    print("No peak found for mass: " + str(row["mass"]) + " RT: " + str(row["rt"]) + " because peak height is below threshold.")
-                    continue
-                else:
-                    print("Peak found for mass: " + str(row["mass"]) + " RT: " + str(row["rt"]))
-                    if not peaklist_filename == "":
-                        # Save the peak to the peaklist file
-                        with open(peaklist_filename, "a") as f:
-                            f.write(f"{row['mass']}\t{row['rt']}\t{round(peakarea, 2)}\t{round(peakheight, 2)}\n")
-                        print("Peak saved to peaklist: " + str(peaklist_filename) + ".")
-                    if not mzrt_filename == "":
-                        # Save the peak to the mzrt file to be processed directly
-                        with open(mzrt_filename, "a") as f:
-                            file = os.path.normpath(ms_file.filename)
-                            file = file.split(os.sep)[-1]
-                            print("Taskstorage file: " + str(file))
-                            f.write(f"{file}\t{row['mass']}\t{row['rt']}\t{settings_dict}\n")
-                            print("Peak saved to mzrt file: " + str(mzrt_filename) + ".")
-                        continue
             self.peak_df = new_peak_df.copy()
             print("Length of peak df at the end of mass " + str(mass) + ": " + str(len(self.peak_df)))
 
@@ -513,10 +522,11 @@ class FindPeaks:
         #Calculate peak area
         peak_areas = []
         for peak in range(len(peaks)):
-            left = int(properties["left_ips"][peak])
-            right = int(properties["right_ips"][peak])
-            area = np.trapz(smoothed_intensity[left:right], dx=(times[1] - times[0]))
+            left = int(properties["left_ips"][peak]) - 1
+            right = int(properties["right_ips"][peak]) + 1
+            area = np.trapz(smoothed_intensity[left:right], times[left:right])
             if area <= self.threshold_area:
+                print("Identified peak below threshold area. Going to next identified peak.")
                 continue
             spec = class_Spec.Spec(self.ms_file, true_indices_of_entries[peaks[peak]], spec_requested_filter_mode="Full scan", mass_deviation=self.kwargs["mass_deviation"])
             interesting_range = {k: v for k, v in spec.summarized_mass_intensity_dict.items() if k > mass-(self.mass_range*1.1) and k < mass+(self.mass_range*1.1)}

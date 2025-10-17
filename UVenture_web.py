@@ -42,18 +42,13 @@ def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
         return
 
 def start_pd_process(ms_filepath, parentfolder, peaklist_filename, mzrt_filename, settings_dict):
-    threshold_intensity = settings_dict["pred_minimum_assumed_noise"] * 7
+    threshold_intensity = settings_dict["pred_minimum_assumed_noise"] * 4
     ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=parentfolder, **settings_dict)
     UVenture_peakdetection.FindPeaks(ms_file, settings_dict, mass_range=1, 
                                         threshold_area=150000, threshold_intensity=threshold_intensity,
-                                        min_peak_width=4, max_peak_width=40,
+                                        min_peak_width=3, max_peak_width=40,
                                         peaklist_filename=peaklist_filename, mzrt_filename=mzrt_filename,
-                                        max_gaussian_fits=10, )
-    #UVenture_peakdetection.get_all_possible_peaks(ms_file, settings_dict, mass_range=1, 
-    #                                    threshold_area=150000, threshold_intensity=threshold_intensity, 
-    #                                   rt_bins=400, mass_deviation_isotopo=settings_dict["mass_deviation"]/5, height_deviation_isotopo=0.5,
-    #                                    min_peak_width=4, max_peak_width=40,
-    #                                   peaklist_filename=peaklist_filename, mzrt_filename=mzrt_filename)
+                                        max_gaussian_fits=15)
     return
 
 def resource_path(relative_path):
