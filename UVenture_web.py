@@ -27,13 +27,13 @@ import UVenture.class_MS_file as class_MS_file
 import UVenture.class_Spec as class_Spec
 import UVenture.class_Prediction as class_Prediction
 
-
-
 def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
     try:
         print("Starting analysis for m/z: " + str(mz) + ", rt: " + str(rt) + ", ms_filepath: " + ms_filepath)
         ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile, **settings_dict)
         print("MS file loaded")
+        rt_window_to_keep = 100
+        ms_file.trunct_ms_file(rt-(rt_window_to_keep/2), rt+(rt_window_to_keep/2))
         myanalysis = UVenture.OneAnalysis(ms_file, mz, rt, **settings_dict)
         return
     except Exception as e:
@@ -1004,9 +1004,9 @@ class Webpage:
                 print("Total RAM: " + str(round(total_ram / (1024 * 1024 * 1024), 3)) + " GB")
                 print("Available RAM: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")
                 size_msfile = os.path.getsize(ms_filepath)
-                if available_ram <= ((2*size_msfile) + 400*1024*1024) or (available_ram / total_ram) < 0.12:
+                if available_ram <= ((3*size_msfile) + 400*1024*1024) or (available_ram / total_ram) < 0.15:
                     if len(running_analyses) > 1:
-                        print("Not enough RAM available to load new task. Needed: " + str(round((2*size_msfile + 200*1024*1024) / (1024 * 1024 * 1024), 3)) + " GB, Available: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")
+                        print("Not enough RAM available to load new task. Needed: " + str(round((3*size_msfile + 400*1024*1024) / (1024 * 1024 * 1024), 3)) + " GB, Available: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")
                         return datetime.datetime.now()
                     else:
                         print("Only one process running. Proceeding to load new task despite low RAM. Needed: " + str(round((2*size_msfile + 200*1024*1024) / (1024 * 1024 * 1024), 3)) + " GB, Available: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")

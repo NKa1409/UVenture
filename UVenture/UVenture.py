@@ -203,6 +203,12 @@ class OneAnalysis:
         
         self.mass_old = self.mass
         self.mass = self.adjust_mass_to_closest_measured_mass(self.best_molecular_ion_spec)
+        if abs(self.mass_old - self.mass) >= (4 * ( (self.mass_old * self.kwargs["mass_deviation"])/1000000 )):
+            self.make_oa_log_entry("INFO:\t" + "Failure. No mass found at the given parameters! Stopping the prediction.")
+            if self.kwargs["oa_zip_folder_when_finished"] == True:
+                shutil.make_archive(os.path.join(self.ms_file.parentfolder, str(round(self.mass, 5)) + "_" + str(round(self.rt, 3))), "zip", self.kwargs["one_analysis_folder"])
+                shutil.rmtree(self.kwargs["one_analysis_folder"])
+            return
         self.make_oa_log_entry("INFO:\t" + "Adjusting the mass of the molecular ion...")
         self.make_oa_log_entry("INFO:\t" + "New mass: " + str(self.mass) + "  Old mass: " + str(self.mass_old))
         self.mass = self.mass + (self.kwargs["charge_of_measured_mass"] * 0.000548)
@@ -301,10 +307,9 @@ class OneAnalysis:
 
     def adjust_retention_time_to_peak_maximum(self, original_rt, max_rt_shift, xic):
         try:
-            index_window = int(((max_rt_shift * (max(xic[0]) / len(xic[0])))+1) / 2)
-            print(index_window)
-            peak_index = xic[0].index(min(xic[0], key=lambda x: abs(original_rt - x)))
-            rt_window, int_window = xic[0][peak_index-index_window:peak_index+index_window], xic[1][peak_index-index_window:peak_index+index_window]
+            rt_idx_out = MS_functions._rt_window_indices_scan(xic[0], original_rt, max_rt_shift/2)
+            lower_bound_index, upper_bound_index = min(rt_idx_out), max(rt_idx_out)
+            rt_window, int_window = xic[0][lower_bound_index:upper_bound_index], xic[1][lower_bound_index:upper_bound_index]
             print(rt_window)
             print(int_window)
             peak_avg_int_dict = {}
@@ -314,21 +319,10 @@ class OneAnalysis:
                 except IndexError:
                     continue
                 peak_avg_int_dict[rt_window[i]] = tripple_summed_int
+            if len(peak_avg_int_dict) == 0 or sum(peak_avg_int_dict.values()) == 0:
+                return original_rt
             avg_peak_maximum_rt = max(peak_avg_int_dict, key=peak_avg_int_dict.get)
-            avg_peak_maximum_index = rt_window.index(avg_peak_maximum_rt)
-            avg_ints = [peak_avg_int_dict[i] for i in peak_avg_int_dict.keys()]
-            avg_rts = [i for i in peak_avg_int_dict.keys()]
-            try:
-                sg_window = int(len(avg_ints) / 5) if int(len(avg_ints) / 5) > 2 else 3
-                smooth_intensities = scipy.signal.savgol_filter(avg_ints, sg_window, 2)
-            except Exception as e:
-                print("Error while smoothing intensities: " + str(e))
-                print(traceback.format_exc())
-                smooth_intensities = list(peak_avg_int_dict.values())
-            new_indices_of_identified_peaks = [i for i in range(1, len(smooth_intensities) - 1) if smooth_intensities[i - 1] < smooth_intensities[i] > smooth_intensities[i + 1]]
-            if len(new_indices_of_identified_peaks) >= 2:
-                peak_index_in_smooth = min(new_indices_of_identified_peaks, key=lambda x: abs(peak_index - x))
-            new_rt = avg_rts[peak_index_in_smooth]
+            new_rt = avg_peak_maximum_rt
             if new_rt == avg_peak_maximum_rt:
                 print("Peak was adjusted to the average peak maximum retention time: " + str(new_rt))
                 print("It is likely a good adjustment.")

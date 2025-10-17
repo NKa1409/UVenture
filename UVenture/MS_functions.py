@@ -12,6 +12,25 @@ import UVenture.GaussianCompressor as GaussianCompressor
 
 
 
+
+
+
+def _rt_window_indices_scan(rts, center, half_width=50):
+    # Returns a list of indices that fall within this window.
+    # E.g.: rts = [2,4,5,6,7,9,10,11,12,13], center = 7, half_width=2
+    # OUTPUT: [2,3,4,5] <-- those are the indices of the retention times that fall within the specified window.
+    lo_v, hi_v = center - half_width, center + half_width
+    out = []
+    for i, v in enumerate(rts):
+        if v < lo_v:
+            continue
+        if v > hi_v:
+            break
+        out.append(i)
+    return out
+
+
+
 def read_mzml_file(mzml_filename):
     f = mzml.read(mzml_filename)
     f = list(f)

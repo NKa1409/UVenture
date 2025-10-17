@@ -431,6 +431,18 @@ class MS_File:
                 self.rawdata[index]["m/z array"] = curr_masses
                 self.rawdata[index]["intensity array"] = curr_intensity
 
+    def trunct_ms_file(self, rt_seconds_window_lower, rt_seconds_window_upper):
+        del self.file
+        window = rt_seconds_window_upper - rt_seconds_window_lower
+        rt_to_keep = rt_seconds_window_lower + (window/2)
+        indices_to_keep = MS_functions._rt_window_indices_scan(self.rt_list, rt_to_keep, half_width=window/2)
+        self.rawdata = self.rawdata[min(indices_to_keep):max(indices_to_keep)]
+        self.rt_list = self.rt_list[min(indices_to_keep):max(indices_to_keep)]
+        self.all_filters = self.all_filters[min(indices_to_keep):max(indices_to_keep)]
+        self.tic = self.tic[min(indices_to_keep):max(indices_to_keep)]
+        self.all_modes = self.all_modes[min(indices_to_keep):max(indices_to_keep)]
+        self.available_modes = list(set(self.available_modes))
+
     def save_ms_file_log_entry(self, log_entry):
         #get the dirname of the logfile_filepath
         directory_logfile = os.path.dirname(self.kwargs["logfile_filepath"])

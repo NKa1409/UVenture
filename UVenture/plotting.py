@@ -200,9 +200,14 @@ def create_isotopo_plot_with_go(spec_masses, spec_intensities, formula_to_simula
     return True
 
 
-def create_xic(rt_list, intensities, title, filepath, retention_time=0):
+def create_xic(rt_list, intensities, title, filepath, retention_time=0, width_observed_time_seconds=-1):
     """
     Creates an Extracted Ion Chromatogram (XIC) plot using matplotlib.
+    width_observed_time_seconds can be either of the three cases:
+        -1 for automatic detection of the red bar in the xic, 
+        0 for no red bar in the XIC,
+        arb. pos. number for a red bar in the xic of the specified length.
+
     """
     fig = matplotlib.figure.Figure()
     ax = fig.subplots()
@@ -211,8 +216,11 @@ def create_xic(rt_list, intensities, title, filepath, retention_time=0):
     plot_heights = [max(intensities)/4 for i in range(len(identified_peak_times))]
     ax.scatter(identified_peak_times, plot_heights, color="green", label="identified peak", s=20, alpha=0.5)
     if not retention_time == 0:
-        width_observed_time = (max(rt_list) / len(rt_list)) * 40
-        ax.bar(retention_time, max(intensities), color="red", label="observed time", alpha=0.5, width=width_observed_time)
+        if width_observed_time_seconds == -1:
+            width_observed_time_seconds = 10
+            width_observed_time_seconds = (max(rt_list) - min(rt_list)) / 30
+        if not width_observed_time_seconds == 0:
+            ax.bar(retention_time, max(intensities), color="red", label="observed time", alpha=0.5, width=width_observed_time_seconds)
         xic_peak_index = rt_list.index(min(rt_list, key=lambda x: abs(retention_time - x)))
         ax.scatter(retention_time, intensities[xic_peak_index], color="red", marker="x", s=100)
     ax.plot(rt_list, intensities, color="blue", label="XIC")
