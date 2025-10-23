@@ -253,8 +253,8 @@ def create_oa_summary_plot(oa_summary_object, true_fragment_list, best_frag_spec
     ax[0][2] = fig.add_subplot(gs[0, 2])
     frag_axs = []
     for i in range(0, len(frag_masses), 1):
-        row_index = int(i/2 + 2)
-        col_index = int(i%2)
+        row_index = int(i/3 + 1)
+        col_index = int(i%3)
         frag_axs.append(fig.add_subplot(gs[row_index, col_index]))
 
     fig.suptitle("Summary Plot for Mass: " + str(round(oa_summary_object.mass, 4)) + " at RT: " + str(round(oa_summary_object.rt, 2)) + "\nPredicted Formula: " + str(oa_summary_object.best_molecular_ion_prediction), wrap=True, fontsize=16, fontweight="bold")
@@ -283,13 +283,14 @@ def create_oa_summary_plot(oa_summary_object, true_fragment_list, best_frag_spec
     frags_in_mi_spec = {}
     for fragment in true_fragment_list:
         frag_mass = fragment[4]
+        frag_formula = fragment[7]
         within_mi_spec = any(math.isclose(frag_mass, v, rel_tol=0.0, abs_tol=( (oa_summary_object.kwargs["mass_deviation"] * frag_mass) / 1000000 )) for v in oa_summary_object.best_molecular_ion_spec.summarized_masses)
         frag_mass_in_mi_spec = min(oa_summary_object.best_molecular_ion_spec.summarized_masses, key=lambda v: abs(v - frag_mass))
         frag_int_in_mi_spec = oa_summary_object.best_molecular_ion_spec.summarized_mass_intensity_dict[frag_mass_in_mi_spec]
         if within_mi_spec:
             frags_in_mi_spec[frag_mass_in_mi_spec] = frag_int_in_mi_spec
-            ax[0][1].bar(frag_mass_in_mi_spec, frag_int_in_mi_spec, color="blue", label="Fragment")
-            ax[0][1].text(fragment[4], (fragment[6]), str(fragment[7]), ha='center', va='bottom', rotation=0)
+            ax[0][1].bar(frag_mass_in_mi_spec, frag_int_in_mi_spec, color="blue", label=frag_formula)
+            ax[0][1].text(frag_mass_in_mi_spec, (frag_int_in_mi_spec), str(fragment[7]), ha='center', va='bottom', rotation=0)
     ax[0][1].set_title("Molecular ion spectrum\n" + " RT: " + str(oa_summary_object.best_molecular_ion_spec.rt), wrap=True)
     ax[0][1].set_xlabel("ion mass / u")
     ax[0][1].set_ylabel("intensity / a.u.")
@@ -299,6 +300,11 @@ def create_oa_summary_plot(oa_summary_object, true_fragment_list, best_frag_spec
         max_y_scale = 0
     max_y_scale = max([max_y_scale, intensity_of_molecular_ion_in_mi_spec])
     ax[0][1].set_ylim([0, max_y_scale*1.3])
+    highest_signals = top5_items = sorted(oa_summary_object.best_molecular_ion_spec.summarized_mass_intensity_dict.items(), key=lambda kv: (kv[1], kv[0]), reverse=True)[:5]
+    mi_text = "Highest signals:\n"
+    for ma, i in highest_signals:
+        mi_text = mi_text + "-   " + str(round(ma, 4)) + " \n"
+    ax[0][1].text(0.01, 0.99, mi_text, transform=ax[0][1].transAxes, ha="left", va="top", bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7))
     ax[0][1].legend()
 
     xic = oa_summary_object.xic
@@ -330,8 +336,8 @@ def create_oa_summary_plot(oa_summary_object, true_fragment_list, best_frag_spec
         fragformula = true_fragment_list[i][7]
         frag_int = true_fragment_list[i][6]
         curr_xic = oa_summary_object.ms_file.get_xic(frag_masses[i], round(((oa_summary_object.kwargs["mass_deviation"]*oa_summary_object.mass) / 1000000), 4), requested_filter_mode=oa_summary_object.best_frag_spec.filter_mode)
-        observed_window_width = (max(oa_summary_object.ms_file.rt_list) / len(oa_summary_object.ms_file.rt_list)) * 20
-        ax.bar(oa_summary_object.ms_file.rt_list[peak_index], max(curr_xic[1]), color="red", label="observed time", alpha=0.5, width=observed_window_width)
+        width_observed_time_seconds = (max(curr_xic[0]) - min(curr_xic[0])) / 30
+        ax.bar(oa_summary_object.ms_file.rt_list[peak_index], max(curr_xic[1]), color="red", label="observed time", alpha=0.5, width=width_observed_time_seconds)
         ax.plot(curr_xic[0], curr_xic[1], color="blue", label="XIC " + str(round(frag_masses[i], 4)))
         ax.set_xlabel("retention time / s")
         ax.set_ylabel("intensity / a.u.")
