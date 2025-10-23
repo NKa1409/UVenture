@@ -16,8 +16,6 @@ import UVenture.plotting as plotting
 
 class Prediction:
     def __init__(self, ms_file, mass, spec, spec_before=None, spec_after=None, **kwargs):
-        self.debug_output = True
-
         self.ms_file = ms_file
         self.mass = min(list(spec.summarized_mass_intensity_dict.keys()), key=lambda x: abs(mass - x))
         self.spec = spec
@@ -46,12 +44,11 @@ class Prediction:
             print("Using absolute_pred_folder now...")
             print(kwargs["absolute_pred_folder"])
         
-        default_kwargs = {"pred_folder":pred_folder,  
+        default_kwargs = {"log_level": "vvv",
+                          "pred_folder":pred_folder,  
                           "pred_log_filepath": os.path.join(pred_folder, "prediction_log_for_mass_" + str(round(self.mass, 4)) + ".txt"),
                           "pred_save_matplotlib_plot_of_isotopologues":False,
-                          "pred_save_go_plot_of_isotopologues":False,
                           "pred_save_xic_plot":False,
-                          "pred_save_detailed_log":True,
                           "pred_formula_cache_folder_path":"U://MyFolder//MONOTONS//Filtermessungen//Formula_Predictions//",
 
                           "pred_atoms_to_keep_in_prediction": ['C', 'H', 'N', 'O', 'S', 'Cl', 'Br'],
@@ -76,6 +73,10 @@ class Prediction:
 
                           "oa_fragments_do_peak_computation_if_area_higher_than": 4}
         self.kwargs = {**default_kwargs, **kwargs}
+        if self.kwargs["log_level"] == "vv" or self.kwargs["log_level"] == "vvv":
+            self.debug_output = True
+        else:
+            self.debug_output = False
         os.makedirs(self.kwargs["pred_folder"], exist_ok=True)
 
 
@@ -85,16 +86,16 @@ class Prediction:
         self.make_op_log_entry("=============================================================")
         self.make_op_log_entry("=============================================================")
         self.make_op_log_entry("=============================================================")   
-        self.make_op_log_entry("INFO:\t" + "Creating prediction object for mass: " + str(self.mass) + " at retention time: " + str(self.rt) + " at index: " + str(self.spec.index))    
-        self.make_op_log_entry("INFO:\t" + "Intensity of the molecular ion: " + str(self.intensity_of_ion))
-        self.make_op_log_entry("INFO:\t" + "Assuming a mass deviation of: " + str(self.kwargs["mass_deviation"]))
+        self.make_op_log_entry("vINFO:\t" + "Creating prediction object for mass: " + str(self.mass) + " at retention time: " + str(self.rt) + " at index: " + str(self.spec.index))    
+        self.make_op_log_entry("vvINFO:\t" + "Intensity of the molecular ion: " + str(self.intensity_of_ion))
+        self.make_op_log_entry("vvINFO:\t" + "Assuming a mass deviation of: " + str(self.kwargs["mass_deviation"]))
         print("Intensity of ion for prediction: " + str(self.intensity_of_ion))
         self.xic = self.ms_file.get_xic(self.mass, ((self.kwargs["mass_deviation"]*self.mass)/1000000), requested_filter_mode=self.spec.filter_mode)
-        self.make_op_log_entry("INFO:\t" + "XIC calculated.")
+        self.make_op_log_entry("vvvINFO:\t" + "XIC calculated.")
         self.identified_peaks_for_mass = MS_functions.get_peaks_in_xy_series(self.xic[0], self.xic[1], sg_window=10, sg_order=3)
-        self.make_op_log_entry("INFO:\t" + "Number of peaks found in XIC: " + str(len(self.identified_peaks_for_mass)))
+        self.make_op_log_entry("vvINFO:\t" + "Number of peaks found in XIC: " + str(len(self.identified_peaks_for_mass)))
         self.prediction_spec_within_peak_range = self.check_if_provided_spectrum_within_peak_range(self.spec.index, self.identified_peaks_for_mass)
-        self.make_op_log_entry("INFO:\t" + "Checked if the provided spectrum is within the peak range of the XIC. Result: " + str(self.prediction_spec_within_peak_range))
+        self.make_op_log_entry("vvINFO:\t" + "Checked if the provided spectrum is within the peak range of the XIC. Result: " + str(self.prediction_spec_within_peak_range))
 
         if not self.prediction_spec_within_peak_range:
             self.peak_found = False
@@ -104,21 +105,21 @@ class Prediction:
             print("Looking at peak: RT: " + str(self.spec.rt) + " Index: " + str(self.spec.index) + " Mass: " + str(self.mass))
             if self.kwargs["pred_return_if_no_peak_is_found"]:
                 print("Returning...")
-                self.make_op_log_entry("Returning...")
+                self.make_op_log_entry("vINFO:\tReturning because no peak was found...")
                 return
             print("However, the program will continue...")
-            self.make_op_log_entry("However, the program will continue...")
+            self.make_op_log_entry("vINFO:\tNo peak was found, however, the program will continue...")
         else:
             print("Peak is detected where prediction should be made.")
             self.peak_found = True
-            self.make_op_log_entry("INFO:\t" + "Peak is detected where a prediction should be made!")
+            self.make_op_log_entry("vINFO:\t" + "Peak is detected where a prediction should be made!")
 
 
         neutral_mass = self.mass + (0.000548 * self.kwargs["charge_of_measured_mass"])
         _, possible_formulas = formula_cache.get_formula_from_cache(self.kwargs["pred_formula_cache_folder_path"], neutral_mass, self.kwargs["mass_deviation"], debug_output=self.debug_output)
-        self.make_op_log_entry("INFO:\t" + "Retrieved formulas from cache.")
+        self.make_op_log_entry("vvvINFO:\t" + "Retrieved formulas from cache.")
         if self.kwargs["charge_of_measured_mass"] < 0:
-            self.make_op_log_entry("INFO:\t" + "Charge of the measured mass is negative. Removing formulas with Li, Na and K...")
+            self.make_op_log_entry("vvINFO:\t" + "Charge of the measured mass is negative. Removing formulas with Li, Na and K...")
             possible_formulas = {key: value for key, value in possible_formulas.items() if "Na" not in key and "K" not in key and "Li" not in key and "Mg" not in key and "Ca" not in key and "Be" not in key}
 
         atoms_to_keep_in_prediction = self.kwargs["pred_atoms_to_keep_in_prediction"]
@@ -133,6 +134,7 @@ class Prediction:
         possible_formulas = new_possible_formulas
 
         print(possible_formulas)
+        self.make_op_log_entry("vvvINFO:\tPossible Formulas: " + str(possible_formulas))
 
         self.make_op_log_entry("=============================================================")
         self.make_op_log_entry("OUTPUT OF SIMPLE FORMULA PREDICTION (ONLY MASS DEVIAITON):")
@@ -153,7 +155,7 @@ class Prediction:
             formula_score = sum(e_s[3] for e_s in list(isotope_check.values())) - ppm_dev_subtract
             self.make_op_log_entry("INFO:\t" + "Formula: " + str("".join([str(a) + str(n) for a, n in entry[0].items()])) + " \t Score: " + str(round(formula_score, 2)))
             self.formula_score_dict[str(entry[0])] = formula_score
-            if self.kwargs["pred_save_detailed_log"] == True:
+            if self.kwargs["log_level"] in ["vvv", "vv", "v"]:
                 self.make_op_log_entry("OUTPUT OF FORMULA PREDICTION WITH MASS SPECTRUM (ISOTOPOLOGUES)")
                 self.make_op_log_entry("Mass of ion: " + str(self.mass))
                 self.make_op_log_entry("PPM DEVIATION OF MOLECULE FORMULA: " + str(round(entry[1], 2)))
@@ -195,42 +197,37 @@ class Prediction:
 
         # If the user wants to save the XIC plot, create it and save it
         if self.kwargs["pred_save_xic_plot"] == True:
-            self.make_op_log_entry("INFO:\t" + "Start saving XIC plot...")
+            self.make_op_log_entry("vvvINFO:\t" + "Start saving XIC plot...")
             self.xic_plot_filepath = os.path.join(self.kwargs["pred_folder"], "xic_" + str(round(self.mass, 4)) + "+-" + str(self.kwargs["mass_deviation"]) + "_" + str(self.spec.filter_mode) + ".png")
             title = "XIC for mass: " + str(round(self.mass, 4)) + " at RT: " + str(round(self.spec.rt, 2)) + " seconds\nFilter mode: " + str(self.spec.filter_mode)
             plotting.create_xic(self.xic[0], self.xic[1], title, self.xic_plot_filepath, retention_time=self.spec.rt)
-            self.make_op_log_entry("INFO:\t" + "Finished saving XIC plot...")
+            self.make_op_log_entry("vvvINFO:\t" + "Finished saving XIC plot...")
         
         # If the user wants to save the matplotlib plot of isotopologues, create it and save it
         if self.kwargs["pred_save_matplotlib_plot_of_isotopologues"] == True and len(list(self.formula_score_dict.keys())) > 0:
-            self.make_op_log_entry("INFO:\t" + "Start saving matplotlib plot of isotopologues...")
+            self.make_op_log_entry("vvvINFO:\t" + "Start saving matplotlib plot of isotopologues...")
             self.matplotlib_plot_filepath = os.path.join(self.kwargs["pred_folder"], "isotopo_matplotlib_plot_" + str(round(self.mass, 4)) + "_" + str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.formula_score_dict.keys())[0]).items()])) + ".png")
             plotting.create_isotopo_plot(self.spec.summarized_masses, self.spec.summarized_intensities, ast.literal_eval(list(self.formula_score_dict.keys())[0]), self.matplotlib_plot_filepath)
-            self.make_op_log_entry("INFO:\t" + "Finished saving matplotlib plot of isotopologues...")
-        
-        # If the user wants to save the go plot of isotopologues, create it and save it
-        if self.kwargs["pred_save_go_plot_of_isotopologues"] == True and len(list(self.formula_score_dict.keys())) > 0:
-            self.make_op_log_entry("INFO:\t" + "Start saving go plot of isotopologues...")
-            self.go_plot_filepath = os.path.join(self.kwargs["pred_folder"], "isotopo_go_plot_" + str(round(self.mass, 4)) + "_" + str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.formula_score_dict.keys())[0]).items()])) + ".html")
-            plotting.create_isotopo_plot_with_go(self.spec.summarized_masses, self.spec.summarized_intensities, ast.literal_eval(list(self.formula_score_dict.keys())[0]), self.go_plot_filepath, mass_deviation=self.kwargs["mass_deviation"])
-            self.make_op_log_entry("INFO:\t" + "Finished saving go plot of isotopologues...")
+            self.make_op_log_entry("vvvINFO:\t" + "Finished saving matplotlib plot of isotopologues...")
         
         try:
             if len(list(self.formula_score_dict.keys())) >= 1:
-                self.make_op_log_entry("INFO:\t" + "Setting best formula prediction...")
+                self.make_op_log_entry("vvvINFO:\t" + "Setting best formula prediction...")
                 self.best_formula_prediction = ast.literal_eval(list(self.formula_score_dict.keys())[0])
                 self.score_of_best_formula = self.formula_score_dict[(list(self.formula_score_dict.keys())[0])]
                 self.simulated_isotopologue_pattern_for_best_formula = formula_calculations.simulate_isotope_pattern_of_formula(self.best_formula_prediction, mass_resolution_ppm=self.kwargs["mass_deviation"], debug_output=self.debug_output)
                 #self.simulated_isotopologue_pattern_for_best_formula = {mass: abundance, ...}
-                self.make_op_log_entry("INFO:\t" + "Best formula prediction set. " + str(chemical_formula_parsing.get_formula_string_from_dict(self.best_formula_prediction)) + "   " + str(self.score_of_best_formula))
+                self.make_op_log_entry("vINFO:\t" + "Best formula prediction set. " + str(chemical_formula_parsing.get_formula_string_from_dict(self.best_formula_prediction)) + "   " + str(self.score_of_best_formula))
             else:
-                self.make_op_log_entry("INFO:\t" + "No best formula was found!")
+                self.make_op_log_entry("vINFO:\t" + "No best formula was found!")
         except Exception as e:
-            print("ERROR: Problem with best formula prediction setting!")
-            print(str(e))
-            print(self.formula_score_dict)
+            self.make_op_log_entry("ERROR:\tProblem with best formula prediction setting!")
+            self.make_op_log_entry(str(e))
+            self.make_op_log_entry(self.formula_score_dict)
+            self.make_op_log_entry(traceback.format_exc())
+            print("Error with best formula prediction setting! " + str(e))
             print(traceback.format_exc())
-        self.make_op_log_entry("INFO:\t" + "Finished creating prediction object for mass: " + str(self.mass) + " at retention time: " + str(self.rt) + " at index: " + str(self.spec.index))
+        self.make_op_log_entry("vINFO:\t" + "Finished creating prediction object for mass: " + str(self.mass) + " at retention time: " + str(self.rt) + " at index: " + str(self.spec.index))
 
     def check_if_provided_spectrum_within_peak_range(self, index, peak_properties):
         for peak in peak_properties:
@@ -241,11 +238,11 @@ class Prediction:
     def add_likelyhood_of_formula_to_score(self, formula_score_dict):
         #formula score dict given in the form of {"{'C': 2, 'H': 4, 'O': 1}": 100, "{'C': 3, 'H': 6, 'O': 1}": 200, ...}
         self.make_op_log_entry("=============================================================")
-        self.make_op_log_entry("INFO:\t" + "Adding likelyhood of formula to the score...")
-        self.make_op_log_entry("INFO:\t" + "Substract points for N > 2 and C/N <= 4")
-        self.make_op_log_entry("INFO:\t" + "Substract points for H/C >= 2")
-        self.make_op_log_entry("INFO:\t" + "Substract points for dbe < 0")
-        self.make_op_log_entry("INFO:\t" + "Substract points for dbe - O > 7")
+        self.make_op_log_entry("vvINFO:\t" + "Adding likelyhood of formula to the score...")
+        self.make_op_log_entry("vvvINFO:\t" + "Substract points for N > 2 and C/N <= 4")
+        self.make_op_log_entry("vvvINFO:\t" + "Substract points for H/C >= 2")
+        self.make_op_log_entry("vvvINFO:\t" + "Substract points for dbe < 0")
+        self.make_op_log_entry("vvvINFO:\t" + "Substract points for dbe - O > 7")
         for formula_dict_str, score in formula_score_dict.items():
             try:
                 f_dict = ast.literal_eval(formula_dict_str)
@@ -255,10 +252,11 @@ class Prediction:
                                                                             score_subst_senior_rule=self.kwargs["pred_formula_likelihood_substract_score_rdbe_higher_than_senior_rule"],
                                                                             debug_output=self.debug_output)
                 formula_score_dict[formula_dict_str] = float(formula_score_dict[formula_dict_str]) + formula_likelyness
-                self.make_op_log_entry("INFO:\t" + "General likelyness of formula: " + str(chemical_formula_parsing.get_formula_string_from_dict(f_dict)) + " calculated to be: " + str(round(formula_likelyness, 2)))
+                self.make_op_log_entry("vvINFO:\t" + "General likelyness of formula: " + str(chemical_formula_parsing.get_formula_string_from_dict(f_dict)) + " calculated to be: " + str(round(formula_likelyness, 2)))
             except Exception as e:
-                print("ERROR in formula score likelyhood: " + str(e))    
-        self.make_op_log_entry("Finished adding likelyhood of formula to the score...")
+                print("ERROR in formula score likelyhood: " + str(e))
+                self.make_op_log_entry("ERROR:\tError in formula score likelyhood: " + str(e))
+        self.make_op_log_entry("vvINFO:\tFinished adding likelyhood of formula to the score...")
         return formula_score_dict
 
     def check_for_isotope_pattern(self, formula_dict):
@@ -267,22 +265,22 @@ class Prediction:
 
         isotope_pattern_dict = formula_calculations.simulate_isotope_pattern_of_formula(formula_dict, debug_output=self.debug_output)
         isotope_pattern_dict = dict(sorted(isotope_pattern_dict.items(), key=lambda x: x[1], reverse=True))
-        self.make_op_log_entry("Simulated isotope pattern (not corrected for charge and electron mass (equals neutral charge)): " + str(isotope_pattern_dict))
+        self.make_op_log_entry("vINFO:\tSimulated isotope pattern (not corrected for charge and electron mass (equals neutral charge)): " + str(isotope_pattern_dict))
         isotope_pattern_dict = {abs((m - (0.000548 * self.kwargs["charge_of_measured_mass"])) / self.kwargs["charge_of_measured_mass"]): a for m, a in isotope_pattern_dict.items()}
-        self.make_op_log_entry("Simulated isotope pattern (already corrected for electron mass): " + str(isotope_pattern_dict))
+        self.make_op_log_entry("vINFO:\tSimulated isotope pattern (already corrected for electron mass): " + str(isotope_pattern_dict))
 
         isotope_pattern_deviation_list = [abs(self.mass - m) for m in list(isotope_pattern_dict.keys())]
         if isotope_pattern_deviation_list.index(min(isotope_pattern_deviation_list)) == 0:
             pass
         else:
-            self.make_op_log_entry("The mass of the given ion is not the same as the most intense peak for this specific molecule. Adapting the isotope_pattern_dict... (swapping first and second isotope)")
+            self.make_op_log_entry("vINFO:\tThe mass of the given ion is not the same as the most intense peak for this specific molecule. Adapting the isotope_pattern_dict... (swapping first and second isotope)")
             temp_isotope_pattern_dict_list = list(zip(    list(isotope_pattern_dict.keys()), list(isotope_pattern_dict.values())    ))
             if len(temp_isotope_pattern_dict_list) >= 2:
                 temp_isotope_pattern_dict_list[1], temp_isotope_pattern_dict_list[0] = temp_isotope_pattern_dict_list[0], temp_isotope_pattern_dict_list[1]
                 isotope_pattern_dict = dict(temp_isotope_pattern_dict_list)
             else:
                 pass
-            self.make_op_log_entry("Adapted isotope_pattern_dict: " + str(isotope_pattern_dict))
+            self.make_op_log_entry("vINFO:\tAdapted isotope_pattern_dict: " + str(isotope_pattern_dict))
 
         isotopes_found = {}
         previous_deviation_list = []
@@ -291,6 +289,7 @@ class Prediction:
         measured_mass_with_minimal_deviation = min(list(self.spec.summarized_mass_intensity_dict.keys()), key=lambda x: abs(isotopo_mass - x))
         initial_deviation = ((isotopo_mass - measured_mass_with_minimal_deviation) / isotopo_mass) * 1000000
         print("Initial deviation for isotope check: " + str(initial_deviation))
+        self.make_op_log_entry("vvvINFO:\tInitial deviation for isotope check: " + str(initial_deviation))
 
         if (not self.spec_before is None) and (not self.spec_after is None):
             closest_isotopo_mass = min(list(self.spec.summarized_mass_intensity_dict.keys()), key=lambda x: abs(isotopo_mass - x))
@@ -310,8 +309,10 @@ class Prediction:
                 self.intensity_of_ion = self.spec.summarized_mass_intensity_dict[self.mass]
             #self.intensity_of_ion = sum([self.spec.summarized_intensities[i] for i in range(len(self.spec.summarized_masses)) if abs(((self.spec.summarized_masses[i] - self.mass) / self.mass) * 1000000) <= self.kwargs["mass_deviation"]])
         print("Intensity of the ion to check: " + str(self.intensity_of_ion))
+        self.make_op_log_entry("vvvINFO:\tIntensity of the ion to check: " + str(self.intensity_of_ion))
 
         for isotopo in list(isotope_pattern_dict.items()):
+            self.make_op_log_entry("vvvINFO:\tChecking isotopo pattern: " + str(isotopo))
             break_the_isotopo_prediction = False
             isotopo_mass = isotopo[0]
             measured_mass_with_minimal_deviation = min(list(self.spec.summarized_mass_intensity_dict.keys()), key=lambda x: abs((((isotopo_mass - x) / isotopo_mass) * 1000000) - initial_deviation))
@@ -323,6 +324,7 @@ class Prediction:
 
             if (not self.spec_before is None) and (not self.spec_after is None):
                 print("Spec before and spec after is used.")
+                self.make_op_log_entry("vvvINFO:\tSpec before and spec after is used.")
                 closest_isotopo_mass = min(list(self.spec.summarized_mass_intensity_dict.keys()), key=lambda x: abs((((isotopo_mass - x) / isotopo_mass) * 1000000) - initial_deviation))
                 closest_isotopo_mass_before = min(list(self.spec_before.summarized_mass_intensity_dict.keys()), key=lambda x: abs((((isotopo_mass - x) / isotopo_mass) * 1000000) - initial_deviation))
                 closest_isotopo_mass_after = min(list(self.spec_after.summarized_mass_intensity_dict.keys()), key=lambda x: abs((((isotopo_mass - x) / isotopo_mass) * 1000000) - initial_deviation))
@@ -335,6 +337,7 @@ class Prediction:
                     measured_intensity += self.spec_after.summarized_mass_intensity_dict[closest_isotopo_mass_after]
             else:
                 print("Only one spec is used.")
+                self.make_op_log_entry("vvvINFO:\tOnly one spec is used.")
                 measured_intensity = 0
                 closest_isotopo_mass = min(list(self.spec.summarized_mass_intensity_dict.keys()), key=lambda x: abs((((isotopo_mass - x) / isotopo_mass) * 1000000) - initial_deviation))
                 if ((abs(closest_isotopo_mass - isotopo_mass) / isotopo_mass) * 1000000) <= self.kwargs["mass_deviation"]:
@@ -342,6 +345,7 @@ class Prediction:
                     measured_intensity = self.spec.summarized_mass_intensity_dict[closest_isotopo_mass]
 
             print("Measured intensity for ion: " + str(measured_intensity))
+            self.make_op_log_entry("vvvINFO:\tMeasured intensity for ion: " + str(measured_intensity))
 
             if (deviation < self.kwargs["mass_deviation"]) and (abs(deviation - initial_deviation) <= (self.kwargs["mass_deviation"] / 2)) and (abs(measured_mass_with_minimal_deviation-isotopo_mass) <= (self.kwargs["mass_deviation"]/1000000)*150 ):
                 print("In if statement for isotope check...")
@@ -442,16 +446,32 @@ class Prediction:
         #self.intensity_of_ion = sum([self.spec.summarized_intensities[i] for i in range(len(self.spec.summarized_masses)) if abs(((self.spec.summarized_masses[i] - self.mass) / self.mass) * 1000000) <= self.kwargs["mass_deviation"]])
         return isotopes_found
     
-    def make_op_log_entry(self, log_entry, error=False):
-        if self.kwargs["pred_save_detailed_log"] == False and error == False:
+    
+    def make_op_log_entry(self, log_entry: str, error: bool = False) -> bool:
+        # current logger level like "", "v", "vv", "vvv"
+        try:
+            s = self.kwargs.get("log_level", "").lower()
+        except Exception as e:
+            print("Error in Prediction logging: " + str(e))
+            s = ""
+        current_level = {'': 0, 'v': 1, 'vv': 2, 'vvv': 3}.get(s, 0)
+        # message verbosity: count leading v's, clamp to 3
+        msg_level = len(log_entry) - len(log_entry.lstrip('v'))
+        if msg_level > 3:
+            msg_level = 3
+        # decide to log
+        if not error and msg_level > current_level:
             return False
-        #get the dirname of the spec_log_filepath
+        # strip the v-prefix from the message
+        log_entry_clean = log_entry[msg_level:]
+        # ensure directory exists
         directory_logfile = os.path.dirname(self.kwargs["pred_log_filepath"])
-        #create the directory if it does not exist
         os.makedirs(directory_logfile, exist_ok=True)
-        log_f = open(self.kwargs["pred_log_filepath"], "a")
-        log_f.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\t" + log_entry + "\n")
-        log_f.close()
+        # write
+        ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        prefix = "ERROR\t" if error else ""
+        with open(self.kwargs["pred_log_filepath"], "a") as f:
+            f.write(f"{ts}\t{prefix}{log_entry_clean}\n")
         return True
 
 
@@ -463,10 +483,11 @@ class Prediction:
         new_formula_score_dict = copy.deepcopy(formula_score_dict)
 
         mi_xic = self.xic
-        self.make_op_log_entry("Starting to calculate the matching of the areas for every prediction in the formula_score_dict.")
-        self.make_op_log_entry("Good matching mass traces for isotopologues will increase the score. Bad matching will lead to a decreasing score.")
+        self.make_op_log_entry("vvINFO:\tStarting to calculate the matching of the areas for every prediction in the formula_score_dict.")
+        self.make_op_log_entry("vvvINFO:\tGood matching mass traces for isotopologues will increase the score. Bad matching will lead to a decreasing score.")
         for formula, score in formula_score_dict.items():
             print("Starting isotopo matching for formula: " + str(formula))
+            self.make_op_log_entry("vvvINFO:\tStarting isotopo matching for formula: " + str(formula))
             formula_dict = ast.literal_eval(formula)
             simulated_isotopo_abundances_dict = formula_calculations.simulate_isotope_pattern_of_formula(formula_dict, debug_output=self.debug_output)
 
@@ -482,12 +503,21 @@ class Prediction:
                 mass_deviation_for_xic = ((self.kwargs["mass_deviation"] * isotopo_masse)/1000000)
                 isotopo_xic = self.ms_file.get_xic(isotopo_masse, mass_deviation_for_xic, requested_filter_mode=self.spec.filter_mode)
                 area, peak1_rt, peakintensity1, peak2_rt, peakintensity2 = MS_functions.compare_peak_shape_similarity(mi_xic, isotopo_xic, self.rt, debug_output=self.debug_output)
+                self.make_op_log_entry("vvvINFO:\tPeakShapeComparison: " + str(area) + " - " + str(peak1_rt) + " - " + str(peakintensity1) + " - " + str(peak2_rt) + " - " + str(peakintensity2))
+                if self.kwargs["log_level"] == "vvv":
+                    self.make_op_log_entry("vvvINFO:\tCreating isotopologue matching plot for :" + str(self.mass) + " and: " + str(isotopo_masse) + " with formula: " + str(chemical_formula_parsing.get_formula_string_from_dict(formula_dict)))
+                    title = "Isotopo matching evaluation" + str(round(self.mass, 4)) + " / " + str(round(isotopo_masse, 4)) + " Formula: " + str(chemical_formula_parsing.get_formula_string_from_dict(formula_dict))
+                    save_filepath = os.path.join(self.kwargs["pred_folder"], "isotopo_matching_plots", str(chemical_formula_parsing.get_formula_string_from_dict(formula_dict)) + "_isotopoMass" + str(round(isotopo_masse, 4)) + ".png")
+                    plotting.create_xic_matching_plot(list(peak1_rt), list(peakintensity1), list(peak2_rt), list(peakintensity2), title, area, save_filepath)
                 break_formula_evaluation = False
                 if area < 0:
                     print("Area was not calculated correct. Setting it to: self.kwargs['oa_fragments_do_peak_computation_if_area_higher_than'] * 30")
+                    self.make_op_log_entry("vvINFO:\tArea was not calculated correct. Setting it to: self.kwargs['oa_fragments_do_peak_computation_if_area_higher_than'] * 30")
                     area = self.kwargs["oa_fragments_do_peak_computation_if_area_higher_than"] * 30
 
                 print("Area for isotopologue with mass: " + str(isotopo_masse) + "   ; area = " + str(area))
+                self.make_op_log_entry("vvvINFO:\tArea for isotopologue with mass: " + str(isotopo_masse) + "   ; area = " + str(area))
+
                 theoretical_intensity_of_isotopo_peak = (intensity_of_mi / (list(simulated_isotopo_abundances_dict.items())[0][1])) * isotopo_abundance
                 within_deviation_mass_list = [masse for masse in list(self.spec.summarized_mass_intensity_dict.keys()) if abs((((isotopo_masse - masse) / isotopo_masse) * 1000000) - initial_deviation) < (self.kwargs["mass_deviation"] / 2)]
                 measured_intensity = 0
@@ -496,7 +526,7 @@ class Prediction:
                 isotopo_int_percent_of_mi_int = theoretical_intensity_of_isotopo_peak / intensity_of_mi
                 area_threshhold = self.kwargs["oa_fragments_do_peak_computation_if_area_higher_than"]
                 if area < area_threshhold: #the peaks match good
-                    area = area + 0.03
+                    area = area + 0.003
                     delta_score = 1 / (1-((area_threshhold-area)/area_threshhold)) # the closer to 1 the better is the matching of the peaks.
                     delta_score = (delta_score ** 0.5)
                     delta_score = delta_score.real
@@ -505,7 +535,7 @@ class Prediction:
                     delta_score = (delta_score ** 0.5).real
                     delta_score = -1 * delta_score
                 rel_isotopo_abundance = (isotopo_abundance / (list(simulated_isotopo_abundances_dict.items())[0][1] ))
-                if delta_score < 0:
+                if delta_score < 0: # The peaks do not match good
                     delta_score = delta_score * 2   #previously * 1.3
                     break_formula_evaluation = True
                 if break_formula_evaluation:
@@ -517,5 +547,5 @@ class Prediction:
             print("Change score for formula: " + str(chemical_formula_parsing.get_formula_string_from_dict(formula)) + "    ; Change score: " + str(change_score) + "    ; New score = " + str(score + change_score))
             new_score = score + change_score
             new_formula_score_dict[formula] = new_score
-            self.make_op_log_entry("Change score for formula: " + str(chemical_formula_parsing.get_formula_string_from_dict(formula)) + "    ; Change score: " + str(change_score) + "    ; New score = " + str(score + change_score))
+            self.make_op_log_entry("vINFO:\tChange score for formula due to isotopologue matching: " + str(chemical_formula_parsing.get_formula_string_from_dict(formula)) + "    ; Change score: " + str(change_score) + "    ; New score = " + str(score + change_score))
         return new_formula_score_dict

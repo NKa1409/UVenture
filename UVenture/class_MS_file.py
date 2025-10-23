@@ -12,7 +12,6 @@ import UVenture.plotting as plotting
 
 class MS_File:
     def __init__(self, filename=None, **kwargs):
-        self.debug_output = True
         self.do_bckg_subtraction = False
         if filename == None:
             print("No filename provided. Cannot read MS file. Returning...")
@@ -22,11 +21,16 @@ class MS_File:
                 parentfolder = kwargs["parentfolder_msfile"]
             else: 
                 parentfolder = os.path.normpath( str(".".join(filename.split(".")[:-1])))
-            default_kwargs = {"parentfolder_msfile": parentfolder,
+            default_kwargs = {"log_level": "vvv",
+                              "parentfolder_msfile": parentfolder,
                               "logfile_filepath": os.path.join(parentfolder, "MSfile_logfile.txt"),
                               "msfile_raw_file_retention_time_unit": "sec",
                               "create_2d_spec_of_ms_file": False}
             self.kwargs = {**default_kwargs, **kwargs}
+            if self.kwargs["log_level"] == "vv" or self.kwargs["log_level"] == "vvv":
+                self.debug_output = True
+            else:
+                self.debug_output = False
             os.makedirs(self.kwargs["parentfolder_msfile"], exist_ok=True)
 
             self.get_2d_spec = self.kwargs.get("create_2d_spec_of_ms_file", False)
@@ -39,9 +43,11 @@ class MS_File:
 
             self.rename_rawdata_keys()
             print("Renamed rawdata keys: " + str(list(self.rawdata[-1].keys())))
+            self.save_ms_file_log_entry("vINFO:\tRenamed rawdata keys: " + str(list(self.rawdata[-1].keys())))
 
             self.rename_scanlist_keys()
             print("Renamed scanList keys: " + str(list(self.rawdata[-1]["scanList"].keys())))
+            self.save_ms_file_log_entry("vINFO:\tRenamed scanList keys: " + str(list(self.rawdata[-1]["scanList"].keys())))
 
             # Calculate some basic properties of the MS file
             self.rt_list = [element["scanList"]["scan"][0]["scan time"] for element in self.rawdata]
@@ -56,31 +62,34 @@ class MS_File:
             # Check if retention time unit is seconds or minutes and convert to seconds if necessary
             if self.kwargs["msfile_raw_file_retention_time_unit"] in ["min", "minutes", "minute", "mins", "m"]:
                 print("Converting retention time from minutes to seconds...")
+                self.save_ms_file_log_entry("vINFO:\tConverting retention time from minutes to seconds...")
                 for i in range(len(self.rawdata)):
                     self.rawdata[i]["scanList"]["scan"][0]["scan time"] = self.rawdata[i]["scanList"]["scan"][0]["scan time"] * 60
                 self.rt_list = [rt * 60 for rt in self.rt_list]
                 self.method_duration = self.method_duration * 60
             
-            self.save_ms_file_log_entry("INFO:\t" + "Reading MS file: " + str(self.filename))
-            self.save_ms_file_log_entry("INFO:\t" + "Method duration: " + str(self.method_duration))
-            self.save_ms_file_log_entry("INFO:\t" + "Number of spectra: " + str(len(self.rawdata)))
-            self.save_ms_file_log_entry("INFO:\t" + "RT range: " + str(self.rt_range))
-            self.save_ms_file_log_entry("INFO:\t" + "m/z range: " + str(self.mz_range))
+            self.save_ms_file_log_entry("vvINFO:\t" + "Reading MS file: " + str(self.filename))
+            self.save_ms_file_log_entry("vvINFO:\t" + "Method duration: " + str(self.method_duration))
+            self.save_ms_file_log_entry("vvINFO:\t" + "Number of spectra: " + str(len(self.rawdata)))
+            self.save_ms_file_log_entry("vvINFO:\t" + "RT range: " + str(self.rt_range))
+            self.save_ms_file_log_entry("vvINFO:\t" + "m/z range: " + str(self.mz_range))
 
             
             # Get the tic from each scan
             self.tic = []
             for index in range(len(self.rawdata)):
                 self.tic.append(self.rawdata[index]["total ion current"])
-            self.save_ms_file_log_entry("INFO:\t" + "Summed TIC: " + str(sum(self.tic)))
+            self.save_ms_file_log_entry("vvINFO:\t" + "Summed TIC: " + str(sum(self.tic)))
             
             # Check if the last scan has a filter string if not, try to construct it
             try:
                 filter_string = self.rawdata[-1]["scanList"]["scan"][0]["filter string"]
             except Exception as e:
                 print("No filter string found in the last scan. Trying to construct it...")
+                self.save_ms_file_log_entry("vINFO:\tNo filter string found in the last scan. Trying to construct it...")
                 for index in range(len(self.rawdata)):
                     self.rawdata[index]["scanList"]["scan"][0]["filter string"] = self.construct_filter_string(index)
+                self.save_ms_file_log_entry("vINFO:\tFilter string constructed: " + str(self.rawdata[-1]["scanList"]["scan"][0]["filter string"]))
             
             
             # Determine available modes based on filter strings
@@ -94,14 +103,14 @@ class MS_File:
                     self.available_modes.append("AIF")
             self.all_modes = copy.deepcopy(self.available_modes)
             self.available_modes = list(set(self.available_modes))
-            self.save_ms_file_log_entry("INFO:\t" + "Available modes: " + str(self.available_modes))
+            self.save_ms_file_log_entry("vvINFO:\t" + "Available modes: " + str(self.available_modes))
 
             # Calculate a background spectrum for AIF and MS1 spectra 
             self.aif_background_spectrum = None
             self.ms1_background_spectrum = None
             self.get_background_spectra(background_range=(3, 10), bckg_m_dev=0.0001, blank_multiplicator=3)
-            self.save_ms_file_log_entry("INFO:\t" + "Summed MS1 background signals: " + str(sum(list(self.ms1_background_spectrum.values()))))
-            self.save_ms_file_log_entry("INFO:\t" + "Summed AIF background signals: " + str(sum(list(self.aif_background_spectrum.values()))))
+            self.save_ms_file_log_entry("vvINFO:\t" + "Summed MS1 background signals: " + str(sum(list(self.ms1_background_spectrum.values()))))
+            self.save_ms_file_log_entry("vvINFO:\t" + "Summed AIF background signals: " + str(sum(list(self.aif_background_spectrum.values()))))
             
             if self.debug_output: print("Starting to bg substract the data...")
             starttime = datetime.datetime.now()
@@ -110,12 +119,12 @@ class MS_File:
                 os.makedirs(os.path.dirname(save_filename), exist_ok=True)
                 if not os.path.exists(save_filename):
                     plotting.create_2d_massspec_plot(ms_file_object=self, filter_mode="Full scan", save=save_filename, max_dim=5000)
-                    self.save_ms_file_log_entry("INFO:\t" + "2D spectrum saved to: " + str(save_filename))
+                    self.save_ms_file_log_entry("vvINFO:\t" + "2D spectrum saved to: " + str(save_filename))
             if self.do_bckg_subtraction:
                 if self.debug_output: print("Doing background subtraction...")
-                self.save_ms_file_log_entry("INFO:\t" + "Doing background subtraction...")
+                self.save_ms_file_log_entry("vvvINFO:\t" + "Doing background subtraction...")
                 self.do_background_subtraction(background_range=(3, 10), multiplicator=3, bckg_m_dev=0.00001)
-                self.save_ms_file_log_entry("INFO:\t" + "Finished background subtraction...")
+                self.save_ms_file_log_entry("vvvINFO:\t" + "Finished background subtraction...")
                 if self.debug_output: print("Finished background subtraction in: " + str(datetime.datetime.now() - starttime)) 
             if self.debug_output: print("Finished reading MS file")
     
@@ -213,44 +222,52 @@ class MS_File:
         rd_keys = list(example_rawdata.keys())
         if not "m/z array" in rd_keys:
             print("No m/z array found in the rawdata. Trying to find the appropriate key...")
+            self.save_ms_file_log_entry("vINFO:\tNo m/z array found in the rawdata. Trying to find the appropriate key...")
             for key in rd_keys:
                 if ( ("m/z" in key.lower()) or ("mz" in key.lower()) or ("mass" in key.lower()) ) and \
                     ( ("array" in key.lower()) or ("list" in key.lower()) or ("values" in key.lower()) ) and \
                         ( isinstance(self.rawdata[-2][key], tuple) or isinstance(self.rawdata[-2][key], list) or isinstance(self.rawdata[-2][key], np.ndarray) ):
                     print("Found m/z array key: " + str(key))
+                    self.save_ms_file_log_entry("vINFO:\tFound m/z array key: " + str(key))
                     for index in range(len(self.rawdata)):
                         self.rawdata[index]["m/z array"] = list(self.rawdata[index][key])
                         del self.rawdata[index][key]
         all_kv_pairs = self.extract_key_value_pairs(self.rawdata[-1])
         if not "intensity array" in rd_keys:
             print("No intensity array found in the rawdata. Trying to find the appropriate key...")
+            self.save_ms_file_log_entry("vINFO:\tNo intensity array found in the rawdata. Trying to find the appropriate key...")
             for key in rd_keys:
                 if ( ("intensity" in key.lower()) or ("intensities" in key.lower()) or ("int" in key.lower()) ) and \
                       ( ("array" in key.lower()) or ("list" in key.lower()) or ("values" in key.lower()) ) and \
                         ( isinstance(self.rawdata[-2][key], tuple) or isinstance(self.rawdata[-2][key], list) or isinstance(self.rawdata[-2][key], np.ndarray) ):
                     print("Found intensity array key: " + str(key))
+                    self.save_ms_file_log_entry("vINFO:\tFound intensity array key: " + str(key))
                     for index in range(len(self.rawdata)):
                         self.rawdata[index]["intensity array"] = list(self.rawdata[index][key])
                         del self.rawdata[index][key]
         all_kv_pairs = self.extract_key_value_pairs(self.rawdata[-1])
         if not "scanList" in rd_keys:
             print("No scanList found in the rawdata. Trying to find the appropriate key...")
+            self.save_ms_file_log_entry("vINFO:\tNo scanList found in the rawdata. Trying to find the appropriate key...")
             for key in rd_keys:
                 if ( ("scan list" in key.lower()) or ("scanlist" in key.lower()) or ("list of scans" in key.lower()) or \
                           ("scan dict" in key.lower()) or ("scandict" in key.lower()) or ("description" in key.lower()) ) and \
                                 ( isinstance(self.rawdata[-2][key], dict) ):
                     print("Found scanList key: " + str(key))
+                    self.save_ms_file_log_entry("vINFO:\tFound scanList key: " + str(key))
                     for index in range(len(self.rawdata)):
                         self.rawdata[index]["scanList"] = self.rawdata[index][key]
                         del self.rawdata[index][key]
         all_kv_pairs = self.extract_key_value_pairs(self.rawdata[-1])
         if not "total ion current" in rd_keys:
             print("No total ion current found in the rawdata. Trying to find the appropriate key...")
+            self.save_ms_file_log_entry("vINFO:\tNo total ion current found in the rawdata. Trying to find the appropriate key...")
             for key, value in all_kv_pairs:
                 if ( ("total ion current" in key.lower()) or ("tic" in key.lower()) or ("total ion current signal" in key.lower()) or ("tic int" in key.lower()) or ("ticint" in key.lower()) ):
                       example_tic = value
                       if ( isinstance(example_tic, float) or isinstance(example_tic, int) ):
                         print("Found total ion current key: " + str(key))
+                        self.save_ms_file_log_entry("vINFO:\tFound total ion current key: " + str(key))
                         for index in range(len(self.rawdata)):
                             curr_tic_val = self.get_nested_value(self.rawdata[index], key, delete=True)
                             self.rawdata[index]["total ion current"] = curr_tic_val
@@ -261,10 +278,12 @@ class MS_File:
         print(scanlist_keys)
         if not "scan" in scanlist_keys:
             print("No scan found in the scanList. Trying to find the appropriate key...")
+            self.save_ms_file_log_entry("vINFO:\tNo scan found in the scanList. Trying to find the appropriate key...")
             for key in scanlist_keys:
                 if ("scan" in key.lower() or "scans" in key.lower()) and \
                     ( isinstance(self.rawdata[-1]["scanList"][key], list) or isinstance(self.rawdata[-1]["scanList"][key], tuple) ):
                     print("Found scanList -> scan key: " + str(key))
+                    self.save_ms_file_log_entry("vINFO:\tFound scanList -> scan key: " + str(key))
                     for index in range(len(self.rawdata)):
                         self.rawdata[index]["scanList"]["scan"] = list(self.rawdata[index]["scanList"][key])
                         del self.rawdata[index]["scanList"][key]
@@ -272,19 +291,23 @@ class MS_File:
         scanlist_scan_keys = list(self.rawdata[-1]["scanList"]["scan"][0].keys())
         if not "scan time" in scanlist_scan_keys:
             print("No scan time found in the scanList -> scan. Trying to find the appropriate key...")
+            self.save_ms_file_log_entry("vINFO:\tNo scan time found in the scanList -> scan. Trying to find the appropriate key...")
             for key in scanlist_scan_keys:
                 if ("rt" in key.lower() or "scanstart" in key.lower().replace(" ", "") or "scantime" in key.lower().replace(" ", "")) and \
                     ( isinstance(self.rawdata[-1]["scanList"]["scan"][0][key], float) or isinstance(self.rawdata[-1]["scanList"]["scan"][0][key], int) ):
                     print("Found scanList -> scan -> scan time key: " + str(key))
+                    self.save_ms_file_log_entry("vINFO:\tFound scanList -> scan -> scan time key: " + str(key))
                     for index in range(len(self.rawdata)):
                         self.rawdata[index]["scanList"]["scan"][0]["scan time"] = self.rawdata[index]["scanList"]["scan"][0][key]
                         del self.rawdata[index]["scanList"]["scan"][0][key]
         if not "filter string" in scanlist_scan_keys:
             print("No filter string found in the scanList -> scan. Trying to find the appropriate key...")
+            self.save_ms_file_log_entry("vINFO:\tNo filter string found in the scanList -> scan. Trying to find the appropriate key...")
             for key in scanlist_scan_keys:
                 if ("filter" in key.lower() or "filter string" in key.lower() or "filt" in key.lower()) and \
                     ( isinstance(self.rawdata[-1]["scanList"]["scan"][0][key], str) ):
                     print("Found scanList -> scan -> filter string key: " + str(key))
+                    self.save_ms_file_log_entry("vINFO:\tFound scanList -> scan -> filter string key: " + str(key))
                     for index in range(len(self.rawdata)):
                         self.rawdata[index]["scanList"]["scan"][0]["filter string"] = self.rawdata[index]["scanList"]["scan"][0][key]
                         del self.rawdata[index]["scanList"]["scan"][0][key]
@@ -297,13 +320,16 @@ class MS_File:
         lower_mass = round(lower_mass, 4)
         if upper_mass < lower_mass:
             print("Upper mass is lower than lower mass. Setting to default values.")
+            self.save_ms_file_log_entry("vINFO:\tUpper mass is lower than lower mass. Setting to default values.")
             upper_mass = 50000
             lower_mass = 0
         if str(upper_mass).lower() == "nan" or str(upper_mass).lower() == "inf":
             print("Upper mass is NaN or Inf. Setting upper mass to 50000 and lower mass to 0.")
+            self.save_ms_file_log_entry("vINFO:\tUpper mass is NaN or Inf. Setting upper mass to 50000 and lower mass to 0.")
             upper_mass = 50000
         if str(lower_mass).lower() == "nan" or str(lower_mass).lower() == "-inf":
             print("Lower mass is NaN or -Inf. Setting lower mass to 0.")
+            self.save_ms_file_log_entry("vINFO:\tLower mass is NaN or -Inf. Setting lower mass to 0.")
             lower_mass = 0
         msn = 0
         polarity = "NA"
@@ -322,6 +348,7 @@ class MS_File:
                         break
                     except:
                         print("Could not get the ms level by key value pair. Trying only keys or values now...")
+                        self.save_ms_file_log_entry("vINFO:\tCould not get the ms level by key value pair. Trying only keys or values now...")
             try:
                 value = str(val).lower().replace(" ", "")
                 key = str(key).lower().replace(" ", "")
@@ -342,10 +369,12 @@ class MS_File:
                     break
                 else:
                     print("No ms level found in key value pairs. Setting ms level to 1 as default.")
+                    self.save_ms_file_log_entry("vINFO:\tNo ms level found in key value pairs. Setting ms level to 1 as default.")
                     msn = 1
             except Exception as e:
                 print("Error while trying to convert ms level: " + str(e))
                 print(traceback.format_exc())
+                self.save_ms_file_log_entry("ERROR:\tError while trying to convert ms level: " + str(e))
                 msn = 1
         filter_string = "FTMS - p ESI "
         if msn == 1:
@@ -353,11 +382,13 @@ class MS_File:
         elif msn == 2:
             filter_string += "hcd [" + str(round(lower_mass, 4)) + "-" + str(round(upper_mass, 4)) + "]"
         print(filter_string)
+        self.save_ms_file_log_entry("vINFO:\tNew filter string: " + str(filter_string))
         return filter_string
                                     
     def get_background_spectra(self, background_range=(3, 10), bckg_m_dev=0.0001, blank_multiplicator=3):
         if "AIF" in self.available_modes and "Full scan" in self.available_modes:
             print("AIF and MS1 spectra available. Proceeding with background calculation...")
+            self.save_ms_file_log_entry("vvvINFO:\tAIF and MS1 spectra available. Proceeding with background calculation...")
         else:
             print("AIF and MS1 spectra not available. Cannot calculate background spectrum. Returning...")
             self.save_ms_file_log_entry("ERROR:\t" + "AIF and MS1 spectra not available. Cannot calculate background spectrum. Returning...")
@@ -405,7 +436,7 @@ class MS_File:
     def do_background_subtraction(self, background_range=(3,10), bckg_m_dev=0.0001):
         if self.aif_background_spectrum is None or self.ms1_background_spectrum is None:
             self.get_background_spectra(background_range=background_range, bckg_m_dev=bckg_m_dev)
-        
+        self.save_ms_file_log_entry("vvvINFO:\tStarting background subtraction...")
         for index in range(len(self.rawdata)):
             print("Doing background subtraction for index: " + str(index) + " / " + str(len(self.rawdata)))
             curr_masses = self.rawdata[index]["m/z array"]
@@ -443,12 +474,29 @@ class MS_File:
         self.all_modes = self.all_modes[min(indices_to_keep):max(indices_to_keep)]
         self.available_modes = list(set(self.available_modes))
 
-    def save_ms_file_log_entry(self, log_entry):
-        #get the dirname of the logfile_filepath
+    def save_ms_file_log_entry(self, log_entry):    
+        # current logger level like "", "v", "vv", "vvv"
+        try:
+            s = self.kwargs.get("log_level", "")
+            s = s.lower()
+        except Exception as e:
+            print("Error in ms_file logging: " + str(e))
+            s = ""
+        current_level = {'': 0, 'v': 1, 'vv': 2, 'vvv': 3}.get(s, 0)
+        # message verbosity: count leading v's, clamp to 3
+        msg_level = len(log_entry) - len(log_entry.lstrip('v'))
+        if msg_level > 3:
+            msg_level = 3
+        # decide to log
+        if msg_level > current_level:
+            return False
+        # strip the v-prefix from the message
+        log_entry_clean = log_entry[msg_level:]
+        # ensure directory exists
         directory_logfile = os.path.dirname(self.kwargs["logfile_filepath"])
-        #create the directory if it does not exist
         os.makedirs(directory_logfile, exist_ok=True)
-        log_f = open(self.kwargs["logfile_filepath"], "a")
-        log_f.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\t" + log_entry + "\n")
-        log_f.close()
+        # write
+        ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(self.kwargs["logfile_filepath"], "a") as f:
+            f.write(f"{ts}\t{log_entry_clean}\n")
         return True

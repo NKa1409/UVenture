@@ -1,4 +1,5 @@
 # plotting.py
+import math
 import os
 import PIL
 import matplotlib
@@ -240,94 +241,106 @@ def create_oa_summary_plot(oa_summary_object, true_fragment_list, best_frag_spec
     """
     Creates a summary plot for the OA (one analysis) object.
     """
-    ncols = 2
-    nrows = 2
+    ncols = 3
+    nrows = 1
     frag_masses = [frag[4] for frag in true_fragment_list if frag[4] >= 1]
-    nrows = nrows + int( len(frag_masses)/2 + 0.5 )
+    nrows = nrows + int( len(frag_masses)/3 + 0.667 )
     fig = matplotlib.figure.Figure(constrained_layout=True, figsize=(5*ncols, 5*nrows), dpi=DPI)
     gs = matplotlib.gridspec.GridSpec(nrows=nrows, ncols=ncols, figure=fig)
-    ax = [[None, None],
-            [None      ]]
+    ax = [[None, None, None]]
     ax[0][0] = fig.add_subplot(gs[0, 0])
     ax[0][1] = fig.add_subplot(gs[0, 1])
-    ax[1][0] = fig.add_subplot(gs[1, :])
-    ax[1][0].axis("off")
+    ax[0][2] = fig.add_subplot(gs[0, 2])
     frag_axs = []
     for i in range(0, len(frag_masses), 1):
         row_index = int(i/2 + 2)
         col_index = int(i%2)
         frag_axs.append(fig.add_subplot(gs[row_index, col_index]))
 
-    fig.suptitle("Summary Plot for Mass: " + str(round(oa_summary_object.mass, 4)) + " at RT: " + str(round(oa_summary_object.rt, 2)), wrap=True, fontsize=16, fontweight="bold")
+    fig.suptitle("Summary Plot for Mass: " + str(round(oa_summary_object.mass, 4)) + " at RT: " + str(round(oa_summary_object.rt, 2)) + "\nPredicted Formula: " + str(oa_summary_object.best_molecular_ion_prediction), wrap=True, fontsize=16, fontweight="bold")
 
     ax[0][0].bar(best_frag_spec.summarized_masses, best_frag_spec.summarized_intensities, color="gray", label="Spectrum", alpha=0.2)
     intensity_of_molecular_ion_in_frag_spec = sum([best_frag_spec.summarized_intensities[i] for i in range(len(best_frag_spec.summarized_intensities)) if abs(((best_frag_spec.summarized_masses[i] - oa_summary_object.mass)/oa_summary_object.mass)*1000000) <= oa_summary_object.kwargs["mass_deviation"]])
     ax[0][0].bar(oa_summary_object.mass, intensity_of_molecular_ion_in_frag_spec, color="red", width=1.5, label="Molecule")
     ax[0][0].text(oa_summary_object.mass, (intensity_of_molecular_ion_in_frag_spec), str(true_fragment_list[0][3]), ha='center', va='bottom', rotation=0)
+    ax[0][0].text(0.01, 0.99, "Max int in spec.: " + str(max(best_frag_spec.summarized_intensities)), transform=ax[0][0].transAxes, ha="left", va="top", bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7))
     for fragment in true_fragment_list:
         ax[0][0].bar(fragment[4], fragment[6], color="blue", label="Fragment")
         ax[0][0].text(fragment[4], (fragment[6]), str(fragment[7]), ha='center', va='bottom', rotation=0)
-    ax[0][0].set_title("Fragment spectrum\n" + str(best_frag_spec.filter) + "\nIndex: " + str(best_frag_spec.index) + " RT: " + str(best_frag_spec.rt), wrap=True)
+    ax[0][0].set_title("Fragment spectrum\n" + " RT: " + str(best_frag_spec.rt), wrap=True)
     ax[0][0].set_xlabel("ion mass / u")
     ax[0][0].set_ylabel("intensity / a.u.")
+    max_y_scale = max([frag[6] for frag in true_fragment_list])
+    max_y_scale = max([max_y_scale, intensity_of_molecular_ion_in_frag_spec])
+    ax[0][0].set_ylim([0, max_y_scale*1.3])
     ax[0][0].legend()
 
-    text_str = ""
-    text_str = text_str + "{:<12}|{:<15}|{:<12}|{:<15} {:<15}=> {:<15}|{:>10}|{:>10}|{:>10}\n".format("Comb. score", "Frag mass", "Intensity", "Frag formula", "NL formula", "Molec formula", "score F", "dev. NL", "score M")
-    text_str = text_str + "{:_<12}|{:_<15}|{:_<12}|{:_<15}_{:_<15}___{:_<15}|{:_>10}|{:_>10}|{:_>10}\n".format("", "", "", "", "", "", "", "", "")
-    for fragment in oa_summary_object.matching_fragments_list:
-        comb_mi_score = sum([frag[1] for frag in oa_summary_object.matching_fragments_list if frag[3] == fragment[3]])
-        text_str = text_str + "{:<12}|{:<15}|{:<12}|{:<15} {:<15}=> {:<15}|{:>10}|{:>10}|{:>10}\n".format(str(round(comb_mi_score, 1)), 
-                                                                                                            str(round(fragment[4], 5)),
-                                                                                                        str(round(fragment[6], 1)),
-                                                                                                        str(fragment[7]),
-                                                                                                        str(fragment[8]),
-                                                                                                        str(fragment[3]),
-                                                                                                        str(round(fragment[5], 1)),
-                                                                                                        str(round(fragment[9], 3)),
-                                                                                                        str(round(fragment[1], 1)))
-    text_str = text_str + "================================================================================\n" + "All fragment predictions for spec: \n"
-
-    text_str_all = "{:<10}|{:<15}|{:<12}\n".format("Mass", "Formula", "Score")
-    text_str_all = text_str_all + "{:_<10}|{:_<15}|{:_<12}\n".format("", "", "")
-    for pred_mass, pred in list(fragment_predictions.items()):
-        try:
-            try:
-                pred_formula = "".join([str(a) + str(n) for a, n in pred.best_formula_prediction.items()])
-            except AttributeError:
-                pred_formula = "None"
-            pred_score = pred.score_of_best_formula
-            if pred_score is None:
-                pred_score = 0
-            text_str_all = text_str_all + "{:<10}|{:<15}|{:<12}\n".format(str(round(pred_mass, 4)), str(pred_formula), str(round(pred_score, 1)))
-        except Exception as e:
-            print("Error creating text_str_all for summary plot.")
-            print(e)
-            print(traceback.format_exc())
-    
-    text_str = text_str + text_str_all
-
-    props = dict(boxstyle='round', facecolor='grey', alpha=0.05)  # bbox features
-    text = ax[1][0].text(0.02, 0.98, text_str, fontfamily="monospace", transform=ax[1][0].transAxes, fontsize=8,
-                verticalalignment="top", bbox=props)
+    ax[0][1].bar(oa_summary_object.best_molecular_ion_spec.summarized_masses, oa_summary_object.best_molecular_ion_spec.summarized_intensities, color="gray", label="Spectrum", alpha=0.2)
+    intensity_of_molecular_ion_in_mi_spec = sum([oa_summary_object.best_molecular_ion_spec.summarized_intensities[i] for i in range(len(oa_summary_object.best_molecular_ion_spec.summarized_intensities)) if abs(((oa_summary_object.best_molecular_ion_spec.summarized_masses[i] - oa_summary_object.mass)/oa_summary_object.mass)*1000000) <= oa_summary_object.kwargs["mass_deviation"]])
+    ax[0][1].bar(oa_summary_object.mass, intensity_of_molecular_ion_in_mi_spec, color="red", width=1.5, label="Molecule")
+    ax[0][1].text(oa_summary_object.mass, (intensity_of_molecular_ion_in_mi_spec), str(true_fragment_list[0][3]), ha='center', va='bottom', rotation=0)
+    ax[0][1].text(0.01, 0.99, "Max int in spec.: " + str(max(oa_summary_object.best_molecular_ion_spec.summarized_intensities)), transform=ax[0][1].transAxes, ha="left", va="top", bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7))
+    frags_in_mi_spec = {}
+    for fragment in true_fragment_list:
+        frag_mass = fragment[4]
+        within_mi_spec = any(math.isclose(frag_mass, v, rel_tol=0.0, abs_tol=( (oa_summary_object.kwargs["mass_deviation"] * frag_mass) / 1000000 )) for v in oa_summary_object.best_molecular_ion_spec.summarized_masses)
+        frag_mass_in_mi_spec = min(oa_summary_object.best_molecular_ion_spec.summarized_masses, key=lambda v: abs(v - frag_mass))
+        frag_int_in_mi_spec = oa_summary_object.best_molecular_ion_spec.summarized_mass_intensity_dict[frag_mass_in_mi_spec]
+        if within_mi_spec:
+            frags_in_mi_spec[frag_mass_in_mi_spec] = frag_int_in_mi_spec
+            ax[0][1].bar(frag_mass_in_mi_spec, frag_int_in_mi_spec, color="blue", label="Fragment")
+            ax[0][1].text(fragment[4], (fragment[6]), str(fragment[7]), ha='center', va='bottom', rotation=0)
+    ax[0][1].set_title("Molecular ion spectrum\n" + " RT: " + str(oa_summary_object.best_molecular_ion_spec.rt), wrap=True)
+    ax[0][1].set_xlabel("ion mass / u")
+    ax[0][1].set_ylabel("intensity / a.u.")
+    try:
+        max_y_scale = max([v for k, v in frags_in_mi_spec.items()])
+    except ValueError:
+        max_y_scale = 0
+    max_y_scale = max([max_y_scale, intensity_of_molecular_ion_in_mi_spec])
+    ax[0][1].set_ylim([0, max_y_scale*1.3])
+    ax[0][1].legend()
 
     xic = oa_summary_object.xic
-    peak_index = oa_summary_object.peak_index
-    xic_peak_index = xic[2].index(min(xic[2], key=lambda x: abs(peak_index - x)))
-    ax[0][1].scatter(oa_summary_object.ms_file.rt_list[peak_index], xic[1][xic_peak_index], color="red", marker="x", s=100)
-    ax[0][1].plot(xic[0], xic[1], label="XIC measured")
-    ax[0][1].set_title("xic_" + str(round(oa_summary_object.mass, 4)) + "+-" + str( round(((oa_summary_object.kwargs["mass_deviation"]*oa_summary_object.mass) / 1000000), 4) ) + "_" + str(oa_summary_object.kwargs["oa_xic_requested_filter_mode"]), wrap=True)
-    ax[0][1].set_xlabel("retention time / seconds")
-    ax[0][1].set_ylabel("intensity / a.u.")
+    peak_index = oa_summary_object.peak_index    
+    identified_peaks = MS_functions.get_peaks_in_xy_series(xic[0], xic[1], sg_window=10, sg_order=3)
+    identified_peak_times = [entry[0] for entry in identified_peaks]
+    plot_heights = [max(xic[1])/4 for i in range(len(identified_peak_times))]
+    ax[0][2].scatter(identified_peak_times, plot_heights, color="green", label="identified peak", s=20, alpha=0.5)
+    ax[0][2].scatter(oa_summary_object.rt, oa_summary_object.intensity_of_molecular_ion, color="red", marker="x", s=30)
+    width_observed_time_seconds = -1
+    if not oa_summary_object.rt == 0:
+        if width_observed_time_seconds == -1:
+            width_observed_time_seconds = 10
+            width_observed_time_seconds = (max(xic[0]) - min(xic[0])) / 30
+        if not width_observed_time_seconds == 0:
+            ax[0][2].bar(oa_summary_object.rt, max(xic[1]), color="red", label="observed time", alpha=0.5, width=width_observed_time_seconds)
+        xic_peak_index = xic[0].index(min(xic[0], key=lambda x: abs(oa_summary_object.rt - x)))
+        ax[0][2].scatter(oa_summary_object.rt, xic[1][xic_peak_index], color="red", marker="x", s=100)
+    ax[0][2].plot(xic[0], xic[1], color="blue", label="XIC")
+    ax[0][2].set_xlabel("retention time / s")
+    ax[0][2].set_ylabel("intensity / a.u.")
+    title = "XIC m=" + str(round(oa_summary_object.mass, 4)) + " +- " + str( round(((oa_summary_object.kwargs["mass_deviation"]*oa_summary_object.mass) / 1000000), 4) ) + " [" + str( oa_summary_object.kwargs["oa_xic_requested_filter_mode"] ) + "]"
+    ax[0][2].set_title(title, wrap=True)
+    ax[0][2].legend()
 
     for i, ax in enumerate(frag_axs):
+        frag_score = true_fragment_list[i][5]
+        nl = true_fragment_list[i][8]
+        fragformula = true_fragment_list[i][7]
+        frag_int = true_fragment_list[i][6]
         curr_xic = oa_summary_object.ms_file.get_xic(frag_masses[i], round(((oa_summary_object.kwargs["mass_deviation"]*oa_summary_object.mass) / 1000000), 4), requested_filter_mode=oa_summary_object.best_frag_spec.filter_mode)
         observed_window_width = (max(oa_summary_object.ms_file.rt_list) / len(oa_summary_object.ms_file.rt_list)) * 20
         ax.bar(oa_summary_object.ms_file.rt_list[peak_index], max(curr_xic[1]), color="red", label="observed time", alpha=0.5, width=observed_window_width)
         ax.plot(curr_xic[0], curr_xic[1], color="blue", label="XIC " + str(round(frag_masses[i], 4)))
         ax.set_xlabel("retention time / s")
         ax.set_ylabel("intensity / a.u.")
-        ax.set_title("Extracted Ion Chromatogram for fragment: " + str(round(frag_masses[i], 4)) + " u at RT: " + str(round(oa_summary_object.rt, 2)) + " s with mode: " + str(oa_summary_object.best_frag_spec.filter_mode), wrap=True)
+        ax.set_title("XIC for fragment: " + str(round(frag_masses[i], 4)) + " at RT: " + str(round(oa_summary_object.rt, 2)) + " \nFormula: " + str(fragformula), wrap=True)
+        frag_text = str(fragformula) + "\n" + \
+                    "Score: " + str(round(frag_score, 1)) + "\n" + \
+                    "Intensity: " + str(round(frag_int, 1)) + "\n" + \
+                    "NL: " + str(nl)
+        ax.text(0.01, 0.99, frag_text, transform=ax.transAxes, ha="left", va="top", bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.7))
         ax.legend()
 
     matplotlib.rcParams.update({'figure.autolayout': True})

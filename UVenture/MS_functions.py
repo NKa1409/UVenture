@@ -287,7 +287,7 @@ def compare_peak_shape_similarity(xic1_original, xic2_original, peak_rt, peakwid
             peakintensity2 = [((i - min_in_window2) / (y2s[index] - min_in_window2)) for i in xic2_cutout[1]]
         except:
             max_peakint2 = max(xic2_cutout[1]) if not max(xic2_cutout[1]) == 0 else 0.0001
-            peakintensity2 = [[((i - min_in_window2) / (max_peakint2)) for i in xic2_cutout[1]]]
+            peakintensity2 = [((i - min_in_window2) / (max_peakint2)) for i in xic2_cutout[1]]
     except Exception as e:
         print("Error: Going into except statement in compare_peak_shape_similarity in MS_functions.py because of: " + str(e))
         if index - peakwidth <= 2:

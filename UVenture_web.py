@@ -183,7 +183,6 @@ class Webpage:
                             ms_filepath = os.path.join(self.mzml_folder, form_data["fileselection"])
                             parentfolder_msfile = os.path.join(self.results_folder, str(".".join(form_data["fileselection"].split(".")[:-1])))
                             ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile)
-                            settings_dict["spec_requested_filter_mode"] = settings_dict["spec_requested_filter_mode"]
                             myspec = class_Spec.Spec(ms_file, form_data["spec_index"], **settings_dict)
                             print("Spec created")
                             print("Starting mass prediction")
