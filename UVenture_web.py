@@ -8,6 +8,7 @@ import os
 import platform
 import shutil
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -177,7 +178,7 @@ class Webpage:
                     if form_data["mz_mass_analysis"] == "":
                         return flask.render_template_string("No m/z given! Cannot analyze peak without a mass. \n Please enter a peak to analyse")
                     if form_data["spec_index"] == "":
-                        return flask.render_template_string("No retention time given! Cannot analyze peak without retention time. \nPlease enter a retention time")
+                        return flask.render_template_string("No spectrum index given! Cannot analyze peak without index. \nPlease enter an index.")
                     def run_prediction_analysis():
                         try:
                             ms_filepath = os.path.join(self.mzml_folder, form_data["fileselection"])
@@ -360,7 +361,7 @@ class Webpage:
                 if not task.name.startswith("UVenture_"):
                     tasks_information.append({"name": task.name, "is_alive": task.is_alive()})
             if not len(tasks_information) <= 3:
-                time_till_finished = ((pending_analyses * best_esimation_for_process_time) / (len(tasks_information)-1)) + best_esimation_for_process_time
+                time_till_finished = (pending_analyses * best_esimation_for_process_time) + (len(running_analyses) * best_esimation_for_process_time / 2)
                 time_till_finished = int(time_till_finished)
                 time_till_finished_hours = time_till_finished / 3600
                 time_till_finished = datetime.timedelta(seconds=time_till_finished)
@@ -532,6 +533,7 @@ class Webpage:
                         p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, peaklist_filename, taskstorage_true, settings_dict), name=proc_name)
                     else:
                         p = multiprocessing.Process(target=start_pd_process, args=(ms_filepath, parentfolder, peaklist_filename, taskstorage_empty, settings_dict), name=proc_name)
+                    p.daemon = False
                     p.start()
                     print("Peak detection process started with name: " + p.name)
                     self.running_processes.append(p)
@@ -1054,6 +1056,7 @@ class Webpage:
                 except Exception as e:
                     print(e)
                     print(traceback.format_exc())
+                p.join()
                 self.running_processes.remove(p)
     
     def update_best_time_approx_per_analysis(self):
@@ -1070,23 +1073,6 @@ class Webpage:
         average_time_seconds = sum(times)/len(times)
         average_time_div_by_cores = average_time_seconds / self.num_cores_to_use
         self.best_time_approx_per_analysis = average_time_div_by_cores
-        
-        finished_process_counter = 0
-        new_process_times = {}
-        for k, v in self.process_times.items():
-            if len(v) == 3:
-                if 360 <= (datetime.datetime.now()- v[0]).total_seconds() <= 14400: # between 0.1 hour and 4 hours
-                    finished_process_counter += 1
-                new_process_times[k] = v
-        oldest_start_time_of_process = datetime.datetime.now()
-        for k, v in new_process_times.items():
-            if len(v) == 3:
-                if v[0] < oldest_start_time_of_process:
-                    oldest_start_time_of_process = v[0]
-        curr_runtime = (datetime.datetime.now() - oldest_start_time_of_process).total_seconds()
-        if finished_process_counter > 0:
-            self.best_time_approx_per_analysis = (curr_runtime - 360) / finished_process_counter
-
         print("Best time approximation per analysis: " + str(self.best_time_approx_per_analysis))
         return self.best_time_approx_per_analysis
 
@@ -1096,6 +1082,7 @@ class Webpage:
         thread_name = ("UVenture_OA_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_MZ_" + str(mz) + "_RT_" + str(rt) + "_FILE_" + str( os.path.basename(ms_filepath) ) )
         print("Starting new process: " + thread_name)
         proc = multiprocessing.Process(target=caller_func, args=[ms_filepath, mz, rt, settings_dict, parentfolder_msfile], name=thread_name)
+        proc.daemon = False
         print("Process created: " + str(proc))
         proc.start()
         print("Process started: " + str(proc))
@@ -1120,6 +1107,7 @@ def get_selected_interface():
             f.write("# The settings are in the format: key=value\n")
             f.write("# Available settings:\n")
             f.write("# debug: True or False (default: False)\n")
+            f.write("# use_reloader: True or False (default: False)\n")
             f.write("# load_dotenv: True or False (default: False)\n")
             f.write("# host: The host to run the webserver on (default: 127.0.0.1). If you want to host the webserver on all IPs use 0.0.0.0\n")
             f.write("# port: The port to run the webserver on (default: 5000)\n")
@@ -1137,7 +1125,7 @@ def get_selected_interface():
         if "=" in line:
             key, value = line.split("=")
             settings_dict[key.strip()] = value.strip()
-    true_parameters = ["debug", "load_dotenv", "host", "port"]
+    true_parameters = ["debug", "load_dotenv", "host", "port", "use_reloader"]
     pop_keys = []
     for k, v in settings_dict.items():
         if k not in true_parameters:
@@ -1165,6 +1153,14 @@ def get_selected_interface():
             else:
                 print(f"Invalid debug value: {v}. Using default debug=False.")
                 settings_dict[k] = False
+        elif k == "use_reloader":
+            if v.lower() in ["true", "1"]:
+                settings_dict[k] = True
+            elif v.lower() in ["false", "0"]:
+                settings_dict[k] = False
+            else:
+                print(f"Invalid debug value: {v}. Using default debug=False.")
+                settings_dict[k] = False
         elif k == "load_dotenv":
             if v.lower() in ["true", "1"]:
                 settings_dict[k] = True
@@ -1179,20 +1175,44 @@ def get_selected_interface():
             settings_dict["port"] = 5000
     if "debug" not in settings_dict:
         settings_dict["debug"] = False
+    if "use_reloader" not in settings_dict:
+        settings_dict["use_reloader"] = False
     if "load_dotenv" not in settings_dict:
         settings_dict["load_dotenv"] = False
     print("Webserver settings loaded: " + str(settings_dict))
     return settings_dict
 
 
+def get_create_app():
+    return Webpage().app
+
 
 if __name__ == "__main__":
-    multiprocessing.freeze_support()
-    webapp = Webpage()
-    #webapp.app.run(host="0.0.0.0", debug=False, use_reloader=False, port=5000)
-    webserver_settings = get_selected_interface()
-    webapp.app.run(**webserver_settings)
-    print("Server running")
-    while True:
-        time.sleep(1)
+    development_server = False
+    if development_server == False:
+        multiprocessing.freeze_support()
+        if sys.platform.startswith("win"):
+            from waitress import serve
+            serve(get_create_app(), host="127.0.0.1", port=5000, threads=4)
+        else:
+            cmd = [
+                "gunicorn",
+                "--bind", "127.0.0.1:5000",
+                "--workers", "2",
+                "--threads", "4",
+                "--timeout", "60",
+                "--max-requests", "2000",
+                "--max-requests-jitter", "200",
+                "UVenture_web:get_create_app()",
+            ]
+            subprocess.run(cmd, check=True)
+    else:
+        multiprocessing.freeze_support()
+        webapp = Webpage()
+        #webapp.app.run(host="0.0.0.0", debug=False, use_reloader=False, port=5000)
+        webserver_settings = get_selected_interface()
+        webapp.app.run(**webserver_settings)
+        print("Server running")
+        while True:
+            time.sleep(1)
     
