@@ -1,6 +1,6 @@
-log_level=-
+log_level=vvv
 mass_deviation=10.0
-charge_of_measured_mass=1.0
+charge_of_measured_mass=-1.0
 pred_formula_cache_folder_path=.//static//Formula_Predictions//
 msfile_raw_file_retention_time_unit=sec
 spec_requested_ms_ms_mass=
@@ -35,7 +35,7 @@ oa_molecular_ion_pred_before_spec_acquisition_save_matplotlib_plot=False
 oa_molecular_ion_pred_after_spec_acquisition_save_matplotlib_plot=False
 oa_multiplespec_pred_save_matplotlib_plot_of_isotopologues=False
 oa_multiplespec_pred_save_xic_plot=False
-oa_fragments_absolute_max_number_of_fragment_masses=40
+oa_fragments_absolute_max_number_of_fragment_masses=5
 oa_fragments_pred_save_matplotlib_plot_of_isotopologues=True
 oa_fragments_spec_save_matplotlib_plot=True
 oa_fragments_pred_save_xic_plot=True
