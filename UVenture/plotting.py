@@ -7,6 +7,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import traceback
+import matplotlib.figure
 
 import UVenture.formula_calculations as formula_calculations
 import UVenture.MS_functions as MS_functions
@@ -15,7 +16,8 @@ import UVenture.MS_functions as MS_functions
 
 DPI = 300
 matplotlib.use("Agg")  # Use a non-interactive backend for matplotlib
-
+print(matplotlib.__file__)   # should point into site-packages
+print(matplotlib.__version__)
 
 
 

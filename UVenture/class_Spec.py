@@ -192,15 +192,6 @@ class Spec:
     
 
 
-
-
-
-
-
-
-
-
-
 def get_index_of_spectrum_closest_to_rt(ms_file, target_rt, debug_output=False):
     # MS file is the class MS_file object
     # This function returns the index of the spectrum that is closest to the target_rt.

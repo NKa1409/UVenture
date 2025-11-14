@@ -14,15 +14,6 @@ Quality metric
 Area error = ∫ |y(t) - \hat{y}(t)| dt
 Normalized area error = Area error / ∫ |y(t)| dt
 
-CLI
----
-python hplc_ms_gaussian_compressor.py \
-  --input chromatogram.csv \
-  --max-peaks 10 \
-  --target-rel-area 0.02 \
-  --output-json params.json \
-  --save-reconstruction recon.csv \
-  --plot
 
 Input format
 ------------

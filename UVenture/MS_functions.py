@@ -319,17 +319,40 @@ def compare_peak_shape_similarity(xic1_original, xic2_original, peak_rt, peakwid
     return area, peak1_rt, peakintensity1, peak2_rt, peakintensity2
 
 def get_mode_of_spec(filter_string):
-    if " d " in filter_string and "@hcd" in filter_string:
+    try:
+        mass_range = filter_string.split("[")[1].split("]")[0] # string: 123.5234-623.1234
+        low_mass, high_mass = mass_range.split("-")
+        low_mass = float(low_mass)
+        high_mass = float(high_mass)
+        msx_mass = filter_string.split("Full ms2 ")[1].split("@")[0]
+        msx_mass = float(msx_mass)
+    except Exception as e:
+        #print("Error in get_mode_of_spec: " + str(e)) 
+        #print(filter_string)
+        low_mass = 0
+        high_mass = 0
+        msx_mass = 0
+    if (high_mass*0.45 <= msx_mass <= high_mass*0.65) and not msx_mass == 0:
+        msx_is_roughly_middle = True
+    else:
+        msx_is_roughly_middle = False
+    
+    
+    if (" d " not in filter_string and "hcd" not in filter_string and not "SIM" in filter_string and not "msx" in filter_string and not "ms2 " in filter_string) or \
+            ("Full ms " in filter_string and not "msx" in filter_string and not "ms2" in filter_string and not "SIM" in filter_string):
+        return "Full scan"
+    elif (" d " not in filter_string and "hcd" in filter_string and not "msx" in filter_string and not "SIM" in filter_string) or \
+            ("Full ms2 " in filter_string and msx_is_roughly_middle and not "msx" in filter_string and not "SIM" in filter_string):
+        return "AIF"
+    elif (" d " in filter_string and "@hcd" in filter_string and msx_is_roughly_middle == False):
         ms_ms_masses = []
         filter_parsed = filter_string.split(" ")
         filter_parsed = [x for x in filter_parsed if "hcd" in x]
         for element in filter_parsed:
             ms_ms_masses.append(round(float(element.split("@")[0]), 2))
         return "MS/MS"
-    elif " d " not in filter_string and "hcd" not in filter_string:
-        return "Full scan"
-    elif " d " not in filter_string and "hcd" in filter_string:
-        return "AIF"
+    else:
+        return "Unknown"
 
 
 def min_deviation_between_list_elements(input_list):

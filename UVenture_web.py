@@ -27,6 +27,7 @@ import UVenture.UVenture as UVenture
 import UVenture.class_MS_file as class_MS_file
 import UVenture.class_Spec as class_Spec
 import UVenture.class_Prediction as class_Prediction
+import UVenture.mzml_functions as mzml_functions
 
 def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
     try:
@@ -44,12 +45,32 @@ def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
 
 def start_pd_process(ms_filepath, parentfolder, peaklist_filename, mzrt_filename, settings_dict):
     threshold_intensity = settings_dict["pred_minimum_assumed_noise"] * 4
-    ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=parentfolder, **settings_dict)
-    UVenture_peakdetection.FindPeaks(ms_file, settings_dict, mass_range=1, 
-                                        threshold_area=150000, threshold_intensity=threshold_intensity,
-                                        min_peak_width=3, max_peak_width=40,
-                                        peaklist_filename=peaklist_filename, mzrt_filename=mzrt_filename,
-                                        max_gaussian_fits=15)
+    if isinstance(ms_filepath, list):
+        print("MS Filepath is list")
+        if len(ms_filepath) > 1:
+            print("MS Filepath is list of len: " + str(len(ms_filepath)))
+            summed_ms_file = mzml_functions.sum_multiple_mzmlfiles(ms_filepath, rt_tolerance=3, mass_tolerance=0.0001)
+            UVenture_peakdetection.FindPeaks(summed_ms_file, settings_dict, mass_range=1, 
+                                                threshold_area=150000, threshold_intensity=threshold_intensity,
+                                                min_peak_width=3, max_peak_width=40,
+                                                peaklist_filename=peaklist_filename, mzrt_filename=mzrt_filename,
+                                                max_gaussian_fits=15)
+        elif len(ms_filepath) == 1:
+            ms_filepath = ms_filepath[0]
+            ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=parentfolder, **settings_dict)
+            UVenture_peakdetection.FindPeaks(ms_file, settings_dict, mass_range=1, 
+                                                threshold_area=150000, threshold_intensity=threshold_intensity,
+                                                min_peak_width=3, max_peak_width=40,
+                                                peaklist_filename=peaklist_filename, mzrt_filename=mzrt_filename,
+                                                max_gaussian_fits=15)
+    elif isinstance(ms_filepath, str):
+        print("MS Filepath is string")
+        ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=parentfolder, **settings_dict)
+        UVenture_peakdetection.FindPeaks(ms_file, settings_dict, mass_range=1, 
+                                            threshold_area=150000, threshold_intensity=threshold_intensity,
+                                            min_peak_width=3, max_peak_width=40,
+                                            peaklist_filename=peaklist_filename, mzrt_filename=mzrt_filename,
+                                            max_gaussian_fits=15)
     return
 
 def resource_path(relative_path):
@@ -105,6 +126,8 @@ class Webpage:
         self.server = None
         self.available_files = os.listdir(self.mzml_folder)
         self.available_files = [f for f in self.available_files if f.endswith(".mzML")]
+        self.available_files.sort()
+
         self.curr_ms_file = None
         self.curr_xic_encoded_plot = {}
         self.curr_spec_encoded_plot = {}
@@ -130,6 +153,7 @@ class Webpage:
         def queue_new_analysis():
             self.available_files = os.listdir(self.mzml_folder)
             self.available_files = [f for f in self.available_files if f.endswith(".mzML")]
+            self.available_files.sort()
             self.start_background_task_checking()
             if len(self.available_files) == 0:
                 return flask.redirect("/upload_mzml_file")
@@ -502,6 +526,7 @@ class Webpage:
             # The user can select the mzml file from a dropdown menu.
             self.available_files = os.listdir(self.mzml_folder)
             self.available_files = [f for f in self.available_files if f.endswith(".mzML")]
+            self.available_files.sort()
             self.start_background_task_checking()
             if len(self.available_files) == 0:
                 return flask.redirect("/upload_mzml_file")
@@ -767,6 +792,7 @@ class Webpage:
             # Get the list of available files in the mzml folder
             self.available_files = os.listdir(self.mzml_folder)
             self.available_files = [f for f in self.available_files if f.endswith(".mzML")]
+            self.available_files.sort()
             return flask.jsonify(self.available_files)
 
         @self.app.route("/api/queue_analysis", methods=["GET", "POST"])
@@ -811,6 +837,7 @@ class Webpage:
             # Get the available files in the mzml folder
             self.available_files = os.listdir(self.mzml_folder)
             self.available_files = [f for f in self.available_files if f.endswith(".mzML")]
+            self.available_files.sort()
             total, used, free = shutil.disk_usage(self.parentfolder)
             used_percent = round((used / total) * 100, 2)
             # Get the number of pending analyses
@@ -997,12 +1024,12 @@ class Webpage:
             try:
                 ms_filepath = os.path.join(self.mzml_folder, lines[0].split("\t")[0])
                 total_ram, available_ram = self.get_memory()
-                print("Total RAM: " + str(round(total_ram / (1024 * 1024 * 1024), 3)) + " GB")
-                print("Available RAM: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")
+                #print("Total RAM: " + str(round(total_ram / (1024 * 1024 * 1024), 3)) + " GB")
+                #print("Available RAM: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")
                 size_msfile = os.path.getsize(ms_filepath)
                 if available_ram <= ((3*size_msfile) + 400*1024*1024) or (available_ram / total_ram) < 0.15:
                     if len(running_analyses) > 1:
-                        print("Not enough RAM available to load new task. Needed: " + str(round((3*size_msfile + 400*1024*1024) / (1024 * 1024 * 1024), 3)) + " GB, Available: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")
+                        #print("Not enough RAM available to load new task. Needed: " + str(round((3*size_msfile + 400*1024*1024) / (1024 * 1024 * 1024), 3)) + " GB, Available: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")
                         return datetime.datetime.now()
                     else:
                         print("Only one process running. Proceeding to load new task despite low RAM. Needed: " + str(round((2*size_msfile + 200*1024*1024) / (1024 * 1024 * 1024), 3)) + " GB, Available: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")

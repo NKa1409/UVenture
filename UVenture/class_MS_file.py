@@ -128,7 +128,7 @@ class MS_File:
                 if self.debug_output: print("Finished background subtraction in: " + str(datetime.datetime.now() - starttime)) 
             if self.debug_output: print("Finished reading MS file")
     
-    def get_xic(self, mass, mass_deviation, requested_filter_mode="Full scan"):
+    def get_xic(self, mass, mass_deviation, requested_filter_mode="Full scan", exact_filter=None):
         # The mass deviation is defined as the requested mass +1x the mass deviation and -1x the mass deviation.
         # The mass deviation is given in Da (Dalton), and NOT in PPM!!
         # If the requested mass is 1000 and the mass deviation is 0.005, the range is 999.995 to 1000.005.
@@ -143,18 +143,15 @@ class MS_File:
             
             filter = entry["scanList"]["scan"][0]["filter string"]
             # Determine filter_mode quickly
-            if " d " in filter and "@hcd" in filter:
-                filter_mode = "MS/MS"
-            elif " d " not in filter and "hcd" in filter:
-                filter_mode = "AIF"
-            elif " d " not in filter and "@hcd" not in filter:
-                filter_mode = "Full scan"
+            if not exact_filter is None:
+                if not exact_filter == filter:
+                    continue
             else:
-                filter_mode = "Unknown"
-            
-            # Skip unwanted modes early
-            if requested_filter_mode != "all" and filter_mode != requested_filter_mode:
-                continue
+                filter_mode = MS_functions.get_mode_of_spec(filter_string=filter)
+                
+                # Skip unwanted modes early
+                if requested_filter_mode != "all" and filter_mode != requested_filter_mode:
+                    continue
 
             rt_list.append(entry["scanList"]["scan"][0]["scan time"])
 
@@ -500,3 +497,79 @@ class MS_File:
         with open(self.kwargs["logfile_filepath"], "a") as f:
             f.write(f"{ts}\t{log_entry_clean}\n")
         return True
+    
+    def save_to_mzml_file(self, out_filepath, centroided=False, polarity_of_ms_file=-1):
+        try:
+            from psims.mzml import MzMLWriter
+        except ImportError:
+            print("PSIMS not found. Install in venv to use the function to save MS_File object to mzML files.")
+            return None
+        print("Starting to save MS_File object to mzML file....")
+        rd = self.rawdata
+        n = len(rd)
+
+        with MzMLWriter(out_filepath) as writer:
+            writer.controlled_vocabularies()
+
+            # Minimal but valid header
+            writer.file_description([
+                "MS1 spectrum",
+                "MSn spectrum",
+                "centroid spectrum" if centroided else "profile spectrum",
+            ])
+            writer.software_list([{"id": "uv-ms-export", "version": "1.0", "params": ["python-psims"]}])
+
+            # Adjust components to your instrument as needed
+            src = writer.Source(1, ["electrospray ionization"])
+            an  = writer.Analyzer(2, ["orbitrap"])       # or "quadrupole", "time-of-flight", etc.
+            det = writer.Detector(3, ["inductive detector"])
+            ic  = writer.InstrumentConfiguration(id="IC1", component_list=[src, an, det])
+            writer.instrument_configuration_list([ic])
+
+            dp = writer.DataProcessing([
+                writer.ProcessingMethod(order=1, software_reference="uv-ms-export",
+                                        params=["Conversion to mzML"])
+            ], id="DP1")
+            writer.data_processing_list([dp])
+
+            # Body
+            with writer.run(id="run1", instrument_configuration="IC1"):
+                with writer.spectrum_list(count=n):
+                    for i, sp in enumerate(rd):
+                        mz = np.asarray(sp["m/z array"], dtype=np.float64)
+                        inten = np.asarray(sp["intensity array"], dtype=np.float32)
+
+                        # Ensure monotonic m/z
+                        if mz.size and (mz[1:] < mz[:-1]).any():
+                            order = np.argsort(mz)
+                            mz, inten = mz[order], inten[order]
+
+                        # psims wants minutes
+                        rt_sec = float(sp["scanList"]["scan"][0]["scan time"])
+                        rt_min = rt_sec / 60.0
+
+                        fs = sp["scanList"]["scan"][0].get("filter string", "")
+                        ms_level = 2 if ("hcd" in fs.lower() or " d " in fs.lower()) else 1
+
+                        scan_window = [(float(mz.min()) if mz.size else 0.0,
+                                        float(mz.max()) if mz.size else 0.0)]
+
+                        params = [{"ms level": ms_level}]
+                        tic = sp.get("total ion current")
+                        if tic is not None:
+                            params.append({"total ion current": float(tic)})
+                        if fs:
+                            # PSI-MS CV: MS:1000512 = filter string
+                            params.append({"accession": "MS:1000512", "name": "filter string", "value": fs})
+
+                        writer.write_spectrum(
+                            mz, inten, id=f"index={i}", centroided=centroided,
+                            polarity=polarity_of_ms_file,
+                            scan_start_time=rt_min, scan_window_list=scan_window,
+                            params=params,
+                            scan_params=params,
+                            encoding={"m/z array": np.float64, "intensity array": np.float32},
+                            compression="zlib",
+                        )
+
+        return out_filepath
