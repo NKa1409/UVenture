@@ -91,8 +91,12 @@ def calculate_likelyhood_of_formula_dict(f_dict, charge_of_measured_mass=None, s
             formula_likelyness = formula_likelyness - float((heteroatom_count / 4) - f_dict.get("C", 0)) * 50
 
         if ("C" in list(f_dict.keys())) and ("N" in list(f_dict.keys())):
-            if int(f_dict["N"]) > 2 and (int(f_dict["C"]) / int(f_dict["N"]) <= 2):
-                formula_likelyness = formula_likelyness - ((float(f_dict["N"]) - 2) ** 2) * 50
+            if charge_of_measured_mass < 0:
+                if int(f_dict["N"]) >= 3 and (int(f_dict["C"]) / int(f_dict["N"]) <= 1.7):
+                    formula_likelyness = formula_likelyness - ((float(f_dict["N"]) - 2) ** 2) * 50
+            else:
+                if int(f_dict["N"]) >= 3 and (int(f_dict["C"]) / int(f_dict["N"]) <= 0.75):
+                    formula_likelyness = formula_likelyness - ((float(f_dict["N"]) - 2) ** 2) * 50
 
         if ("C" in list(f_dict.keys())) and ("H" in list(f_dict.keys())):
             if (float(f_dict["H"]) / float(f_dict["C"]) >= 2.5):
