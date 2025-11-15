@@ -108,15 +108,19 @@ def calculate_likelyhood_of_formula_dict(f_dict, charge_of_measured_mass=None, s
 
         dbe = calc_dbe(f_dict)
 
+        if not charge_of_measured_mass == None:
+            if charge_of_measured_mass < 0:
+                dbe = dbe + (charge_of_measured_mass * 0.5)
+            else:
+                dbe = dbe + (charge_of_measured_mass * 0.5)
+
         if dbe < -1:
             score_substract = (abs(dbe + 2) * 10) ** 2
         elif (dbe - f_dict.get("O", 0)) > 7:
             score_substract = abs(dbe - f_dict.get("O", 0) - 7) * 10
         else:
             score_substract = 0
-        if not charge_of_measured_mass == None:
-            if charge_of_measured_mass < 0:
-                dbe = dbe + (charge_of_measured_mass * 0.5)
+        
         if dbe - 1 > (get_mass_of_most_abundant_isotopologue_formula(f_dict) * (62 / 1000)):  # Senior Rule
             score_substract += score_subst_senior_rule
             if debug_output == True:

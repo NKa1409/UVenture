@@ -856,6 +856,23 @@ class OneAnalysis:
 
                     try:
                         area_between_curves, peak1_rt, peakintensity1, peak2_rt, peakintensity2 = MS_functions.compare_peak_shape_similarity(xic1_original=self.xic, xic2_original=fragment_xic, peak_rt=self.rt, debug_output=True, peakwidth=10)
+                        # Calculate the noise level of the fragment. If the peak maximum intensity of the peak is not x times higher than the background, then it is not considered.
+                        index = self.xic[0].index(min(self.xic[0], key=lambda x: abs(self.rt - x)))
+                        try:
+                            fragment_peak_cutout_xic = fragment_xic[index-1, index+2]
+                            average_peak_int = sum(fragment_peak_cutout_xic) / len(fragment_peak_cutout_xic)
+                            fragment_background_cutout_xic = fragment_xic[index-10:index-1] + fragment_xic[index+2:index+12]
+                            average_background_int = sum(fragment_background_cutout_xic) / len(fragment_background_cutout_xic)
+                            peak_above_bckg = average_peak_int / average_background_int
+                        except Exception as e_calculate_signal_level_of_fragment:
+                            print("Error: Exception in fragment signal level calculation: " + str(e_calculate_signal_level_of_fragment))
+                            self.make_oa_log_entry("ERROR:\tException in fragment signal level calculation in UVenture.py: " + str(e_calculate_signal_level_of_fragment))
+                            peak_above_bckg = 10
+                        if peak_above_bckg <= 1.5:
+                            print("Fragment is of too low intensity compared to the background. Adjusting the peak area to skip this fragment...")
+                            self.make_oa_log_entry("vvvINFO:\tFragment is of too low intensity compared to the background. Adjusting the peak area to skip this fragment...")
+                            area_between_curves = area_between_curves + self.kwargs["oa_fragments_do_peak_computation_if_area_higher_than"]
+
                     except Exception as e_peakshapesimilarity:
                         print("Error: Exception in peak shape comparison in UVenture.py: " + str(e_peakshapesimilarity))
                         self.make_oa_log_entry("ERROR:\tException in peak shape comparison in UVenture.py: " + str(e_peakshapesimilarity) + "\tFragment mass: " + str(frag_mass))
