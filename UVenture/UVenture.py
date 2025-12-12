@@ -859,7 +859,7 @@ class OneAnalysis:
                         # Calculate the noise level of the fragment. If the peak maximum intensity of the peak is not x times higher than the background, then it is not considered.
                         index = self.xic[0].index(min(self.xic[0], key=lambda x: abs(self.rt - x)))
                         try:
-                            fragment_peak_cutout_xic = fragment_xic[index-1, index+2]
+                            fragment_peak_cutout_xic = fragment_xic[index-1:index+2]
                             average_peak_int = sum(fragment_peak_cutout_xic) / len(fragment_peak_cutout_xic)
                             fragment_background_cutout_xic = fragment_xic[index-10:index-1] + fragment_xic[index+2:index+12]
                             average_background_int = sum(fragment_background_cutout_xic) / len(fragment_background_cutout_xic)
