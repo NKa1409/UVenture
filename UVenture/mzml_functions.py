@@ -3,7 +3,6 @@ import numpy as np
 import UVenture.class_MS_file as class_MS_file
 import UVenture.MS_functions as MS_functions
 
-
 def sum_multiple_mzmlfiles(mzml_filename_list, rt_tolerance=None, mass_tolerance=1, log_level="-"):
     """
     Combine N mzML files into one MS_File.
@@ -172,10 +171,270 @@ def sum_multiple_mzmlfiles(mzml_filename_list, rt_tolerance=None, mass_tolerance
     return base
 
 
+def calculate_averaged_spectrum(mzml_file, indices_of_spectra, mass_deviation=15):
+    def _ppm_tol(m):
+        return (mass_deviation * float(m)) / 1e6
+    # akzeptiere entweder eine MS_File Instanz oder einen Dateinamen
+    if isinstance(mzml_file, class_MS_file.MS_File):
+        ms = mzml_file
+    else:
+        ms = class_MS_file.MS_File(mzml_file)
+    indices = indices_of_spectra
+    all_mz = []
+    all_int = []
+    for idx in indices:
+        mz_arr = np.asarray(ms.rawdata[idx].get("m/z array", []), dtype=float)
+        int_arr = np.asarray(ms.rawdata[idx].get("intensity array", []), dtype=float)
+        if mz_arr.size == 0:
+            continue
+        all_mz.append(mz_arr)
+        all_int.append(int_arr)
+    if not all_mz:
+        return [], []
+    all_mz = np.concatenate(all_mz)
+    all_int = np.concatenate(all_int)
+    order = np.argsort(all_mz)
+    all_mz = all_mz[order]
+    all_int = all_int[order]
+
+    merged_mz = []
+    merged_int = []
+
+    cur_mz = float(all_mz[0])
+    cur_int = float(all_int[0])
+    for k in range(1, all_mz.size):
+        mz_k = float(all_mz[k])
+        int_k = float(all_int[k])
+        if abs(mz_k - cur_mz) <= _ppm_tol(cur_mz):
+            total_int = cur_int + int_k
+            if total_int > 0:
+                cur_mz = (cur_mz * cur_int + mz_k * int_k) / total_int
+            cur_int = total_int
+        else:
+            merged_mz.append(cur_mz)
+            merged_int.append(cur_int)
+            cur_mz = mz_k
+            cur_int = int_k
+    merged_mz.append(cur_mz)
+    merged_int.append(cur_int)
+    n_bg = float(len(indices))
+    merged_int = [i / n_bg for i in merged_int]
+    summarized_dict = MS_functions.summarize_mass_intensity_dict(dictio=dict(zip(merged_mz, merged_int)), deviation=11, debug_output=True)
+    return list(summarized_dict.keys()), list(summarized_dict.values())
 
 
 
+def remove_background(
+    mzml_file,
+    background_signals=None,
+    mass_deviation=5,
+    remove_completely=True,
+    death_time=10,
+    save_mzml_filepath="",
+    max_signals=10
+):
+    # mass_deviation given in ppm
+    # background_signals:
+    #   - list: [m1, m2, ...]  -> gleiche Liste für alle Modi
+    #   - dict: {mode: [m1, m2, ...]} -> pro Modus (z.B. "Full scan", "MS/MS", "AIF")
+    #   - None: Hintergrund wird aus frühen Scans (rt <= death_time) pro Modus abgeleitet
+    # Wenn background_signals None ist, wird remove_completely intern auf False gesetzt.
+    # remove_completely:
+    #   - True: Peaks an den Hintergrundmassen werden komplett entfernt.
+    #   - False: gemittelter Hintergrund der ersten (max. 10) Scans pro Modus wird subtrahiert.
+    # death_time in Sekunden.
+    # save_mzml_filepath: wenn nicht leer, wird die modifizierte Datei gespeichert.
+
+    # akzeptiere entweder eine MS_File Instanz oder einen Dateinamen
+    if isinstance(mzml_file, class_MS_file.MS_File):
+        ms = mzml_file
+    else:
+        ms = class_MS_file.MS_File(mzml_file)
+
+    def _ppm_tol(m):
+        return (mass_deviation * float(m)) / 1e6
+
+    # RT Liste
+    try:
+        rt_list = list(ms.rt_list)
+    except AttributeError:
+        rt_list = [e["scanList"]["scan"][0]["scan time"] for e in ms.rawdata]
+
+    # Mode-Liste (bevorzugt) oder Fallback auf Filterstring
+    try:
+        mode_list = list(ms.all_modes)
+        if len(mode_list) != len(ms.rawdata):
+            raise ValueError
+    except Exception:
+        mode_list = [e["scanList"]["scan"][0]["filter string"] for e in ms.rawdata]
+
+    # frühe Scans als Hintergrund
+    bg_scan_indices = [i for i, rt in enumerate(rt_list) if rt <= death_time]
+    if not bg_scan_indices:
+        if save_mzml_filepath:
+            if hasattr(ms, "save_to_mzml_file"):
+                ms.save_to_mzml_file(save_mzml_filepath)
+            else:
+                raise AttributeError(
+                    "MS_File object does not implement 'save_to_mzml_file'. Adapt the saving logic in remove_background()."
+                )
+        return ms
+
+    # max. 10 Hintergrundscans
+    bg_scan_indices = bg_scan_indices[:10]
+
+    # Hintergrundscans nach Modus gruppieren
+    from collections import defaultdict
+    mode_to_bg_indices = defaultdict(list)
+    for idx in bg_scan_indices:
+        m = mode_list[idx]
+        mode_to_bg_indices[m].append(idx)
+
+    # pro Modus Hintergrundmassen/-intensitäten
+    bg_mass_int_dict_by_mode = {}
+
+    for m, idxs in mode_to_bg_indices.items():
+        bg_mz, bg_int = calculate_averaged_spectrum(ms, idxs, mass_deviation=mass_deviation)
+        bg_mass_int_dict_by_mode[m] = dict(zip(list(bg_mz), list(bg_int)))
+        bg_mass_int_dict_by_mode[m] = {m:i for m, i in bg_mass_int_dict_by_mode[m].items() if i >= 200}
+        try:
+            bg_mass_int_dict_by_mode[m] = dict(sorted(bg_mass_int_dict_by_mode[m].items(), key=lambda x: x[1], reverse=True)[:max_signals])
+        except:
+            bg_mass_int_dict_by_mode[m] = bg_mass_int_dict_by_mode[m]
+    
+    if background_signals is not None:
+        for m in list(bg_mass_int_dict_by_mode.keys()):
+            bg_mass_int_dict_by_mode[m] = {ma:i for ma,i in bg_mass_int_dict_by_mode[m].items() if any(abs(ma - target) <= target * mass_deviation * 1e-6 for target in background_signals)}
+            for masse in background_signals:
+                try:
+                    bg_mass_int_dict_by_mode[m][masse] += 1
+                except:
+                    bg_mass_int_dict_by_mode[m][masse] = 1
+    print(bg_mass_int_dict_by_mode)
 
 
+    bg_mz_by_mode = {}
+    bg_int_by_mode = {}
+    for mode, bg_dict in bg_mass_int_dict_by_mode.items():
+        bg_mz = np.fromiter(bg_dict.keys(), dtype=float)
+        bg_int = np.fromiter(bg_dict.values(), dtype=float)
+        order = np.argsort(bg_mz)
+        bg_mz_by_mode[mode] = bg_mz[order]
+        bg_int_by_mode[mode] = bg_int[order]
+
+    # Hintergrundentfernung/Subtraktion pro Spektrum, nach Modus getrennt
+    for i in range(len(ms.rawdata)):
+        spec = ms.rawdata[i]
+        m = mode_list[i]
+        progress = i / len(ms.rawdata)
+        filled = int(20 * progress)
+        bar = "#" * filled + "-" * (20 - filled)
+        print(f"\rProcessing: [{bar}] {i}/{len(ms.rawdata)} ({progress * 100:.1f}%)", end="", flush=True)
+        mz_arr = np.asarray(spec.get("m/z array", []), dtype=float)
+        int_arr = np.asarray(spec.get("intensity array", []), dtype=float)
+        if mz_arr.size == 0:
+            continue
+
+        tic = float(spec.get("total ion current", 0.0))
 
 
+        if not m in bg_mz_by_mode:
+            spec["m/z array"] = mz_arr.tolist()
+            spec["intensity array"] = int_arr.tolist()
+            spec["total ion current"] = tic
+            continue
+
+        if remove_completely:
+            keep_mask = np.ones(mz_arr.shape, dtype=bool)
+            if background_signals is not None:
+                masses = background_signals
+            else:
+                masses = bg_mass_int_dict_by_mode[m]
+            for m_bg in masses:
+                tol = _ppm_tol(m_bg)
+                mask = np.abs(mz_arr - m_bg) <= tol
+                if not np.any(mask):
+                    continue
+                tic -= float(np.sum(int_arr[mask]))
+                keep_mask &= ~mask
+            mz_arr = mz_arr[keep_mask]
+            int_arr = int_arr[keep_mask]
+
+
+        else:
+            tol = mz_arr * mass_deviation * 1e-6
+            # index range in bg_mz for each mz_arr[i]
+            left = np.searchsorted(bg_mz, mz_arr - tol, side="left")
+            right = np.searchsorted(bg_mz, mz_arr + tol, side="right")
+
+            # subtract background
+            bg_sub = np.zeros_like(int_arr)
+
+            for i in range(mz_arr.size):
+                lo = left[i]
+                hi = right[i]
+                if lo < hi:
+                    # choose the closest background mass in the window
+                    window = bg_mz[lo:hi]
+                    j = lo + np.argmin(np.abs(window - mz_arr[i]))
+                    bg_sub[i] = bg_int[j]
+
+            int_corr = int_arr - bg_sub
+
+            spec["m/z array"] = mz_arr.tolist()
+            spec["intensity array"] = int_corr.tolist()
+            # if you want TIC after subtraction:
+            spec["total ion current"] = float(int_corr.sum())
+            spec_massses = spec["m/z array"]
+            spec_intensities = spec["intensity array"]
+            spec_massint_dict = dict(zip(list(spec_massses), list(spec_intensities)))
+            corrected = {
+                ma: I - next(
+                    (bgI for mbg, bgI in bg_mass_int_dict_by_mode[m].items()
+                    if abs(ma - mbg) <= ma * mass_deviation * 1e-6),
+                    0
+                )
+                for ma, I in spec_massint_dict.items()
+            }
+            mz_arr = list(corrected.keys())
+            int_arr = list(corrected.values())
+
+        spec["m/z array"] = mz_arr
+        spec["intensity array"] = int_arr
+        spec["total ion current"] = tic
+
+    # TIC und mz_range neu berechnen
+    try:
+        ms.tic = [e["total ion current"] for e in ms.rawdata]
+    except Exception:
+        pass
+
+    mz_min = None
+    mz_max = None
+    for e in ms.rawdata:
+        arr = np.asarray(e.get("m/z array", []), dtype=float)
+        if arr.size == 0:
+            continue
+        mn = float(arr.min())
+        mx = float(arr.max())
+        mz_min = mn if mz_min is None or mn < mz_min else mz_min
+        mz_max = mx if mz_max is None or mx > mz_max else mz_max
+    if mz_min is not None and mz_max is not None:
+        ms.mz_range = [float(mz_min), float(mz_max)]
+
+    # evtl. gecachte Hintergrundspektren invalidieren
+    if hasattr(ms, "aif_background_spectrum"):
+        ms.aif_background_spectrum = None
+    if hasattr(ms, "ms1_background_spectrum"):
+        ms.ms1_background_spectrum = None
+
+    # optionales Speichern
+    if save_mzml_filepath:
+        if hasattr(ms, "save_to_mzml_file"):
+            ms.save_to_mzml_file(save_mzml_filepath)
+        else:
+            raise AttributeError(
+                "MS_File object does not implement 'save_to_mzml_file'. Adapt the saving logic in remove_background()."
+            )
+
+    return ms

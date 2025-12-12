@@ -32,163 +32,64 @@ if __name__ == "__main__":
     '''
 
 
+    #mass, ints = mzml_functions.calculate_averaged_spectrum("22_summed_NatKaffee_file.mzML", [1, 3, 5, 7])
+    #import matplotlib.pyplot as plt
+    #fig, ax = plt.subplots(nrows=1, ncols=1)
+    #ax.bar(mass, ints, width=0.5)
+    #fig.savefig("test.png")
+    #sys.exit()    
+
+    #mzml_functions.remove_background("22_summed_NatKaffee_file.mzML", remove_completely=True, background_signals=None, save_mzml_filepath="dynamic_bgremoved.mzML", max_signals=20)
+    #mzml_functions.remove_background("22_summed_NatKaffee_file.mzML", background_signals=[100.0000], save_mzml_filepath="static_bgremoved.mzML", remove_completely=True, death_time=0.1)
+    #sys.exit()
 
 
 
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("coffeinsynthetisch") and "Verd0_25" in mzmlfile and not "high" in mzmlfile:
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
+    ms_files_cutout = [os.path.join("1000ppb", str("1000ppb_20.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_21.mzML")),
+                       os.path.join("1000ppb", str("1000ppb_22.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_23.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_24.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_25.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_26.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_27.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_28.mzML"))]
     ms_files_cutout.sort()
     print(ms_files_cutout)
     summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_SynKoffein_Verd0_25_file.mzML")
+    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_20_28_summed_Nitrophenole1000ppb.mzML")
 
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("coffeinsynthetisch") and "Verd0_5" in mzmlfile and not "high" in mzmlfile:
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
+    ms_files_cutout = [os.path.join("1000ppb", str("1000ppb_50.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_51.mzML")),
+                       os.path.join("1000ppb", str("1000ppb_52.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_53.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_54.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_55.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_56.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_57.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_58.mzML"))]
     ms_files_cutout.sort()
     print(ms_files_cutout)
     summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_SynKoffein_Verd0_5_file.mzML")
+    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_50_58_summed_Nitrophenole1000ppb.mzML")
 
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("coffeinsynthetisch") and "Verd1" in mzmlfile and not "high" in mzmlfile:
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
+    ms_files_cutout = [os.path.join("1000ppb", str("1000ppb_90.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_91.mzML")),
+                       os.path.join("1000ppb", str("1000ppb_92.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_93.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_94.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_95.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_96.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_97.mzML")), 
+                       os.path.join("1000ppb", str("1000ppb_98.mzML"))]
     ms_files_cutout.sort()
     print(ms_files_cutout)
     summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_SynKoffein_Verd1_file.mzML")
+    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_90_98_summed_Nitrophenole1000ppb.mzML")
 
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("coffeinsynthetisch") and "Verd2" in mzmlfile and not "high" in mzmlfile:
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_SynKoffein_Verd2_file.mzML")
-
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("coffeinsynthetisch") and "Verd3" in mzmlfile and not "high" in mzmlfile:
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_SynKoffein_Verd3_file.mzML")
-
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("coffeinsynthetisch") and "Verd4" in mzmlfile and not "high" in mzmlfile:
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_SynKoffein_Verd4_file.mzML")
+    sys.exit()
 
 
-
-    ###########################
-
-
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("kaffeenatuerlich") and "Verd0_25" in mzmlfile and not "high" in mzmlfile:
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_natuerlichKaffee_Verd0_25_file.mzML")
-
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("kaffeenatuerlich") and "Verd0_5" in mzmlfile and not "high" in mzmlfile:
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_natuerlichKaffee_Verd0_5_file.mzML")
-
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("kaffeenatuerlich") and "Verd1" in mzmlfile and not "high" in mzmlfile:
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_natuerlichKaffee_Verd1_file.mzML")
-
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("kaffeenatuerlich") and "Verd2" in mzmlfile and not "high" in mzmlfile:
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_natuerlichKaffee_Verd2_file.mzML")
-
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("kaffeenatuerlich") and "Verd3" in mzmlfile and not "high" in mzmlfile:
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_natuerlichKaffee_Verd3_file.mzML")
-
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("kaffeenatuerlich") and "Verd4" in mzmlfile and not "high" in mzmlfile:
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_natuerlichKaffee_Verd4_file.mzML")
-
-
-    #################################
-    # All concentrations together
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("kaffeenatuerlich"):
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_natuerlichKaffee_AllConcentrationsTogether_file.mzML")
-
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("KoffeinStandards"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("coffeinsynthetisch"):
-            ms_files_cutout.append( os.path.join("KoffeinStandards", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_SynKoffein_AllConcentrationsTogether_file.mzML")
-
-
-    ####################################
-
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("Koffein"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("nat_kaffee"):
-            ms_files_cutout.append( os.path.join("Koffein", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_NatKaffee_file.mzML")
-
-    ms_files_cutout = []
-    for mzmlfile in os.listdir("Koffein"):
-        if mzmlfile.lower().endswith(".mzml") and mzmlfile.lower().startswith("syn_coffein"):
-            ms_files_cutout.append( os.path.join("Koffein", str(mzmlfile)) )
-    ms_files_cutout.sort()
-    print(ms_files_cutout)
-    summed_ms_obj = mzml_functions.sum_multiple_mzmlfiles(ms_files_cutout)
-    summed_ms_obj.save_to_mzml_file(str(len(ms_files_cutout)) + "_summed_SynKoffein_file.mzML")
 
 
 

@@ -95,12 +95,8 @@ class MS_File:
             # Determine available modes based on filter strings
             self.available_modes = []
             for filter_string in self.all_filters:
-                if " d " in filter_string and "@hcd" in filter_string:
-                    self.available_modes.append("MS/MS")
-                elif " d " not in filter_string and "hcd" not in filter_string:
-                    self.available_modes.append("Full scan")
-                elif " d " not in filter_string and "hcd" in filter_string:
-                    self.available_modes.append("AIF")
+                curr_mode = MS_functions.get_mode_of_spec(filter_string)
+                self.available_modes.append(curr_mode)
             self.all_modes = copy.deepcopy(self.available_modes)
             self.available_modes = list(set(self.available_modes))
             self.save_ms_file_log_entry("vvINFO:\t" + "Available modes: " + str(self.available_modes))
