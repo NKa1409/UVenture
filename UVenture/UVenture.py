@@ -699,7 +699,7 @@ class OneAnalysis:
             self.molecular_ion_prediction.make_op_log_entry("ERROR:\t" + "No formula found!")
             print("Error in getting best molecular ion prediction: " + str(e))
             self.make_oa_log_entry("ERROR:\tError in getting best molecular ion prediction: " + str(e))
-            if "list index out of range" in e:
+            if "list index out of range" in str(e):
                 print("No formula found! So no best formula prediction could be chosen!")
                 self.make_oa_log_entry("ERROR:\tNo formula found! So no best formula prediction could be chosen!")
         self.molecular_ion_prediction.make_op_log_entry("vvINFO:\t" + "Formula predicted with " + str(len(available_specs)) + " spectra.")
