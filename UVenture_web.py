@@ -1,5 +1,6 @@
 import ast
 import base64
+import copy
 import ctypes
 import datetime
 import hashlib
@@ -20,6 +21,11 @@ import matplotlib
 matplotlib.use('Agg')
 import werkzeug
 import multiprocessing
+from __future__ import annotations
+
+import tempfile
+from contextlib import contextmanager
+from typing import Iterable, Optional
 
 import UVenture.MS_functions as MS_functions
 import UVenture.UVenture_peakdetection as UVenture_peakdetection
@@ -152,8 +158,7 @@ class Webpage:
         self.help_page_contents_filepath = resource_path("static/help_page_contents.txt")
         self.taskstorage_filepath = resource_path("static/taskstorage.txt")
         #Clear the task storage file
-        with open(self.taskstorage_filepath, "w") as f:
-            f.write("")
+        self.clear_taskstorage(self.taskstorage_filepath)
 
         @self.app.route("/", methods=["GET", "POST"])
         def index():
@@ -201,8 +206,7 @@ class Webpage:
                     if form_data["retention_time"] == "":
                         return flask.render_template_string("No retention time given! Cannot analyze peak without retention time. \nPlease enter a retention time.")
                     try:
-                        with open(self.taskstorage_filepath, "a") as f:
-                            f.write(form_data["fileselection"] + "\t" + str(form_data["mz_peak_analysis"]) + "\t" + str(form_data["retention_time"]) + "\t" + str(settings_dict) + "\n")
+                        self.append_task(self.taskstorage_filepath, form_data["fileselection"], form_data["mz_peak_analysis"], form_data["retention_time"], settings_dict=settings_dict)
                         print("Task added to task storage file")
                     except Exception as e:
                         print(e)
@@ -248,15 +252,17 @@ class Webpage:
                         return flask.render_template_string("No peak list given! Cannot analyze peaks without a list. \n Please enter a peak list to analyse.")
 
                     lines = peak_list_file.readlines()
-                    with open(self.taskstorage_filepath, "a") as f:
-                        for l in lines:
+                    append_lines_formatted = []
+                    for l in lines:
                             l = l.strip()
-                            f.write(form_data["fileselection"])
-                            f.write("\t")
-                            f.write(l)
-                            f.write("\t")
-                            f.write(str(settings_dict))
-                            f.write("\n")
+                            s = ""
+                            s += (form_data["fileselection"])
+                            s += ("\t")
+                            s += (l)
+                            s += ("\t")
+                            s += (str(settings_dict))
+                            append_lines_formatted.append(copy.deepcopy(s))
+                    self.append_task_lines(self.taskstorage_filepath, append_lines_formatted)
                     self.add_webserver_log_entry("Task started by: \t" + str(self.get_request_info(request=flask.request)))
                     self.add_webserver_log_entry("Peak list analysis started for file: " + str(form_data["fileselection"]) + " with peak_list_file: " + str(new_peak_list_filepath))
 
@@ -361,8 +367,7 @@ class Webpage:
             self.start_background_task_checking()
 
             # Get the list of scheduled tasks from the task storage file
-            with open(self.taskstorage_filepath, "r") as f:
-                lines = f.readlines()
+            lines = self.read_taskstorage_after_writers(self.taskstorage_filepath)
             lines = [line for line in lines if line.strip() != "" and line[0] != "#" and "\t" in line]
             pending_analyses = len(lines)
             try:
@@ -749,22 +754,19 @@ class Webpage:
 
         @self.app.route("/api/get_taskstorage", methods=["GET"])
         def get_taskstorage():
-            with open(self.taskstorage_filepath, "r") as f:
-                lines = f.readlines()
+            lines = self.read_taskstorage_after_writers(self.taskstorage_filepath)
             lines = [line for line in lines if line.strip() != "" and line[0] != "#" and "\t" in line]
             return flask.jsonify(lines)
         
         @self.app.route("/api/delete_taskstorage", methods=["GET", "POST"])
         def delete_taskstorage():
-            with open(self.taskstorage_filepath, "w") as f:
-                f.write("")
+            self.clear_taskstorage(self.taskstorage_filepath)
             self.add_webserver_log_entry("Task storage file deleted by: \t" + str(self.get_request_info(request=flask.request)))
             return flask.jsonify({"status": "success", "message": "Task storage file deleted"})
         
         @self.app.route("/api/kill_all_processes", methods=["GET", "POST"])
         def kill_processes():
-            with open(self.taskstorage_filepath, "w") as f:
-                f.write("")
+            self.clear_taskstorage(self.taskstorage_filepath)
             # Kill all running processes
             for p in self.running_processes:
                 try:
@@ -818,8 +820,7 @@ class Webpage:
             filename = flask.request.args.get("filename", type=str)
             if mz is None or rt is None or filename is None:
                 return flask.jsonify({"status": "error", "message": "Missing parameters"})
-            with open(self.taskstorage_filepath, "a") as f:
-                f.write(filename + "\t" + str(mz) + "\t" + str(rt) + "\t" + str(settings_dict) + "\n")
+            self.append_task(self.taskstorage_filepath, filename, mz, rt, settings_dict)
             print("Task added to task storage file")
             self.add_webserver_log_entry(f"API task addition: Filename: {filename}, mz: {mz}, rt: {rt}")
             return flask.jsonify({"status": "success", "message": "Task added to task storage file"})
@@ -855,8 +856,7 @@ class Webpage:
             total, used, free = shutil.disk_usage(self.parentfolder)
             used_percent = round((used / total) * 100, 2)
             # Get the number of pending analyses
-            with open(self.taskstorage_filepath, "r") as f:
-                lines = f.readlines()
+            lines = self.read_taskstorage_after_writers(self.taskstorage_filepath)
             lines = [line for line in lines if line.strip() != "" and line[0] != "#" and "\t" in line]
             pending_analyses = len(lines)
             status = {
@@ -946,8 +946,10 @@ class Webpage:
                     last_check_time = self.check_and_load_new_task()
                     # Check if the running_processes list is still up to date
                     self.update_running_processes()
-                    time.sleep(0.1)
+                    time.sleep(0.4)
                 except Exception as e:
+                    log_processstart_func("Error in task_check_bckg_func(): " + str(e), log_filepath_obj=os.path.join(resource_path("log/"), "process_start.log"))
+                    log_processstart_func("Error in task_check_bckg_func() TRACEBACK: " + str(traceback.format_exc()), log_filepath_obj=os.path.join(resource_path("log/"), "process_start.log"))
                     print(e)
                     print(traceback.format_exc())
         #Check if the thread is already running
@@ -1024,19 +1026,23 @@ class Webpage:
             return datetime.datetime.now()
         if not os.path.exists(self.taskstorage_filepath):
             print("Task storage file does not exist. Creating it.")
-            with open(self.taskstorage_filepath, "w") as f:
-                f.write("")
-                return datetime.datetime.now()
+            self.clear_taskstorage(self.taskstorage_filepath)
+            return datetime.datetime.now()
         try:
-            with open(self.taskstorage_filepath, "r") as f:
-                lines = f.readlines()
+            lines = self.read_taskstorage_after_writers(self.taskstorage_filepath)
             lines = [line for line in lines if line.strip() != "" and line[0] != "#" and "\t" in line]
             if len(lines) == 0:
                 #print("No tasks to load")
                 return datetime.datetime.now()
+            new_proc_line = lines[0]
+
+            # Remove the first line from the file
+            print("Removing first line from task storage file")
+            self.pop_first_task(self.taskstorage_filepath)
+            print("Removed first line from task storage file")
 
             try:
-                ms_filepath = os.path.join(self.mzml_folder, lines[0].split("\t")[0])
+                ms_filepath = os.path.join(self.mzml_folder, new_proc_line.split("\t")[0])
                 total_ram, available_ram = self.get_memory()
                 #print("Total RAM: " + str(round(total_ram / (1024 * 1024 * 1024), 3)) + " GB")
                 #print("Available RAM: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")
@@ -1048,14 +1054,14 @@ class Webpage:
                     else:
                         print("Only one process running. Proceeding to load new task despite low RAM. Needed: " + str(round((2*size_msfile + 200*1024*1024) / (1024 * 1024 * 1024), 3)) + " GB, Available: " + str(round(available_ram / (1024 * 1024 * 1024), 3)) + " GB")
 
-                parentfolder_msfile = os.path.join(self.results_folder, str(".".join(lines[0].split("\t")[0].split(".")[:-1])))
-                mz = lines[0].split("\t")[1]
+                parentfolder_msfile = os.path.join(self.results_folder, str(".".join(new_proc_line.split("\t")[0].split(".")[:-1])))
+                mz = new_proc_line.split("\t")[1]
                 mz = mz.replace(",", ".")
-                rt = lines[0].split("\t")[2]
+                rt = new_proc_line.split("\t")[2]
                 rt = rt.replace(",", ".")
                 mz = float(mz)
                 rt = float(rt)
-                settings_dict = ast.literal_eval(lines[0].split("\t")[3])
+                settings_dict = ast.literal_eval(new_proc_line.split("\t")[3])
                 print("New task loaded: file: " + str(ms_filepath) + " mz: " + str(mz) + " rt: " + str(rt))
                 self.start_one_oa(ms_filepath,
                                     mz,
@@ -1063,20 +1069,12 @@ class Webpage:
                                     settings_dict,
                                     parentfolder_msfile)
                 print("Started new process for task: " + str(ms_filepath) + " mz: " + str(mz) + " rt: " + str(rt))
+                time.sleep(0.3)
             except Exception as e:
+                log_processstart_func("ERROR: Exception in check_and_load_new_task(): " + str(e), log_filepath_obj=os.path.join(resource_path("log/"), "process_start.log"))
+                log_processstart_func("ERROR: Exception in check_and_load_new_task() TRACEBACK: " + str(traceback.format_exc()), log_filepath_obj=os.path.join(resource_path("log/"), "process_start.log"))
                 print(e)
                 print(traceback.format_exc())
-
-            # Remove the first line from the file
-            print("Removing first line from task storage file")
-            lines = lines[1:]
-            with open(self.taskstorage_filepath, "w") as f:
-                for line in lines:
-                    line = line.strip()
-                    if line == "" or line[0] == "#" or not "\t" in line or line == "\n":
-                        continue
-                    f.write(line + "\n")
-            print("Removed first line from task storage file")
 
         except Exception as e:
             print(e)
@@ -1085,6 +1083,164 @@ class Webpage:
         
         return datetime.datetime.now()
     
+
+    
+    def _is_task_line(self, raw: str) -> bool:
+        s = raw.strip()
+        return bool(s) and not s.startswith("#") and ("\t" in s)
+
+    @contextmanager
+    def _lock_for_taskstorage(self, lock_path: str, exclusive: bool):
+        os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+        lock_f = open(lock_path, "a+")
+        try:
+            if os.name == "nt":
+                # Windows: treat reads as exclusive too (msvcrt has no portable shared lock)
+                import msvcrt
+                lock_f.seek(0)
+                msvcrt.locking(lock_f.fileno(), msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+
+            yield
+        finally:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+                    lock_f.seek(0)
+                    msvcrt.locking(lock_f.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+            finally:
+                lock_f.close()
+
+
+    def read_taskstorage_after_writers(self, task_file: str) -> list[str]:
+        """
+        Blocks until all writers that use task_file + '.lock' are finished,
+        then reads the file once and returns its lines.
+        """
+        lock_path = task_file + ".lock"
+        with self._lock_for_taskstorage(lock_path, exclusive=False):
+            try:
+                with open(task_file, "r", encoding="utf-8", errors="replace") as f:
+                    return f.readlines()
+            except FileNotFoundError:
+                return []
+
+
+    @contextmanager
+    def _exclusive_lock(self, lock_path: str):
+        os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+        lock_f = open(lock_path, "a+")
+        try:
+            if os.name == "nt":
+                import msvcrt
+                lock_f.seek(0)
+                msvcrt.locking(lock_f.fileno(), msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
+            yield
+        finally:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+                    lock_f.seek(0)
+                    msvcrt.locking(lock_f.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+            finally:
+                lock_f.close()
+
+
+    def append_task_lines(self, task_file: str, task_lines: Iterable[str]) -> None:
+        lock_path = task_file + ".lock"
+        with self._exclusive_lock(lock_path):
+            os.makedirs(os.path.dirname(task_file) or ".", exist_ok=True)
+            with open(task_file, "a", encoding="utf-8", newline="\n") as f:
+                for line in task_lines:
+                    line = line.rstrip("\r\n")
+                    if not line:
+                        continue
+                    f.write(line + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+
+
+    def append_task(self,
+        task_file: str,
+        fileselection: str,
+        mz_peak_analysis,
+        retention_time,
+        settings_dict,
+    ) -> None:
+        line = f"{fileselection}\t{mz_peak_analysis}\t{retention_time}\t{settings_dict}"
+        self.append_task_lines(task_file, [line])
+
+
+    def clear_taskstorage(self, task_file: str) -> None:
+        lock_path = task_file + ".lock"
+        with self._exclusive_lock(lock_path):
+            os.makedirs(os.path.dirname(task_file) or ".", exist_ok=True)
+            with open(task_file, "a+", encoding="utf-8") as f:
+                f.seek(0)
+                f.truncate(0)
+                f.flush()
+                os.fsync(f.fileno())
+
+
+    def pop_first_task(self, task_file: str) -> Optional[str]:
+        lock_path = task_file + ".lock"
+        with self._exclusive_lock(lock_path):
+            try:
+                with open(task_file, "r", encoding="utf-8", errors="replace") as f:
+                    raw_lines = f.readlines()
+            except FileNotFoundError:
+                return None
+
+            idx = None
+            for i, raw in enumerate(raw_lines):
+                if self._is_task_line(raw):
+                    idx = i
+                    break
+
+            if idx is None:
+                return None
+
+            removed = raw_lines[idx].rstrip("\r\n")
+            new_lines = raw_lines[:idx] + raw_lines[idx + 1 :]
+
+            dirpath = os.path.dirname(task_file) or "."
+            try:
+                st = os.stat(task_file)
+                old_mode = st.st_mode
+            except FileNotFoundError:
+                old_mode = None
+
+            fd, tmp_path = tempfile.mkstemp(prefix=".taskstorage_", dir=dirpath)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as tf:
+                    tf.writelines(new_lines)
+                    tf.flush()
+                    os.fsync(tf.fileno())
+
+                if old_mode is not None:
+                    os.chmod(tmp_path, old_mode)
+
+                os.replace(tmp_path, task_file)
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except FileNotFoundError:
+                    pass
+
+            return removed
+
+
     def update_running_processes(self):
         for p in self.running_processes:
             if not p.is_alive():
@@ -1242,8 +1398,8 @@ if __name__ == "__main__":
             cmd = [
                 "gunicorn",
                 "--bind", "127.0.0.1:5000",
-                "--workers", "2",
-                "--threads", "4",
+                "--workers", "1",
+                "--threads", "1",
                 "--timeout", "60",
                 "--max-requests", "2000",
                 "--max-requests-jitter", "200",

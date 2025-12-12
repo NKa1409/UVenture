@@ -871,8 +871,9 @@ class OneAnalysis:
                             average_background_int = sum(fragment_background_cutout_xic) / len(fragment_background_cutout_xic)
                             peak_above_bckg = average_peak_int / average_background_int
                         except Exception as e_calculate_signal_level_of_fragment:
-                            print("Error: Exception in fragment signal level calculation: " + str(e_calculate_signal_level_of_fragment))
+                            print("Error: Exception in fragment signal level calculation. It does not effect the flow of the program! " + str(e_calculate_signal_level_of_fragment))
                             self.make_oa_log_entry("ERROR:\tException in fragment signal level calculation in UVenture.py: " + str(e_calculate_signal_level_of_fragment))
+                            self.make_oa_log_entry("ERROR:\tException in fragment signal level calculation in UVenture.py: " + str(traceback.format_exc()))
                             peak_above_bckg = 10
                         if peak_above_bckg <= 1.5:
                             print("Fragment is of too low intensity compared to the background. Adjusting the peak area to skip this fragment...")

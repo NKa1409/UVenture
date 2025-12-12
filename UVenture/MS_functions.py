@@ -400,7 +400,10 @@ def get_peaks_in_xy_series(x, y, sg_window=10, sg_order=3):
 def summarize_mass_intensity_dict(dictio, deviation=11, debug_output=True):
         dictio = {k: v for k, v in dictio.items() if v > 0}
         if debug_output == True:
-            print("summarizing dict according to new method. old length of start dictio:" + str(len(dictio)))
+            try:
+                print("summarizing dict according to new method. old length of start dictio:" + str(len(dictio)))
+            except OSError:
+                pass
         #sort the dictio by its keys
         dictio = dict(sorted(dictio.items(), key=lambda item: item[0]))
         old_masses_list = list(dictio.keys())
@@ -410,8 +413,10 @@ def summarize_mass_intensity_dict(dictio, deviation=11, debug_output=True):
 
         best_approx_ppm_spacing_within_peak = get_best_approx_for_ppm_spacing_within_peak(old_masses_list)
         if debug_output == True:
-            print("best approx for ppm spacing within peak: " + str(best_approx_ppm_spacing_within_peak))
-
+            try:
+                print("best approx for ppm spacing within peak: " + str(best_approx_ppm_spacing_within_peak))
+            except OSError:
+                pass
         while len(old_masses_list) > 0:
             try:
                 remove_all_lower = False
@@ -496,7 +501,10 @@ def summarize_mass_intensity_dict(dictio, deviation=11, debug_output=True):
                 break
         outdict = dict(zip(new_masses_list, new_abundances_list))
         if debug_output == True:
-            print("New length of summarized dictio: " + str(len(outdict)))
+            try:
+                print("New length of summarized dictio: " + str(len(outdict)))
+            except OSError:
+                pass
         return outdict
 
 
