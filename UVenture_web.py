@@ -31,9 +31,13 @@ import UVenture.mzml_functions as mzml_functions
 
 def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
     try:
-        print("Starting analysis for m/z: " + str(mz) + ", rt: " + str(rt) + ", ms_filepath: " + ms_filepath)
-        ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile, **settings_dict)
-        print("MS file loaded")
+        try:
+            print("Starting analysis for m/z: " + str(mz) + ", rt: " + str(rt) + ", ms_filepath: " + ms_filepath)
+            ms_file = class_MS_file.MS_File(ms_filepath, parentfolder_msfile=parentfolder_msfile, **settings_dict)
+            print("MS file loaded")
+        except Exception as e_msfile_load:
+            log_processstart_func("ERROR during MS file load: " + str(e_msfile_load), log_filepath_obj=os.path.join(resource_path("log/"), "process_start.log"))
+            log_processstart_func("ERROR during MS file load TRACEBACK: " + str(traceback.format_exc()), log_filepath_obj=os.path.join(resource_path("log/"), "process_start.log"))
         rt_window_to_keep = 100
         ms_file.trunct_ms_file(rt-(rt_window_to_keep/2), rt+(rt_window_to_keep/2))
         myanalysis = UVenture.OneAnalysis(ms_file, mz, rt, **settings_dict)
@@ -43,6 +47,7 @@ def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
         print(e)
         print(traceback.format_exc())
         log_processstart_func("ERROR during process start: " + str(e), log_filepath_obj=os.path.join(resource_path("log/"), "process_start.log"))
+        log_processstart_func("ERROR during process start TRACEBACK: " + str(traceback.format_exc()), log_filepath_obj=os.path.join(resource_path("log/"), "process_start.log"))
         return
 
 def log_processstart_func(message, log_filepath_obj):
