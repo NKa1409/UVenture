@@ -139,6 +139,12 @@ def create_isotopo_plot(spec_masses, spec_intensities, formula_to_simulate, file
             intensities_to_include.append(summed_intensity)
         else:
             break
+    if len(intensities_to_include) == 0:
+        print("ERROR: NO intensities to include in isotopo plot! see plotting.py")
+        intensities_to_include = [1, 1]
+    if len(intensities_to_include) == 1:
+        print("ERROR: ONLY ONE intensities to include in isotopo plot! see plotting.py")
+        intensities_to_include.append(1)
     sum_intensities = sum(intensities_to_include)
     intensities_to_include = [(i/sum_intensities) for i in intensities_to_include] # normalize intensities
     

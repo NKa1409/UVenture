@@ -582,15 +582,18 @@ class OneAnalysis:
                 continue
 
         self.make_oa_log_entry("vvvINFO:\t" + "Starting first prediction of molecular ion...")
-        self.molecular_ion_prediction = class_Prediction.Prediction(self.ms_file, self.mass, best_molecular_ion_spec, spec_before=self.mi_spec_before, spec_after=self.mi_spec_after,
-                                                   absolute_pred_folder=os.path.join(self.kwargs["one_analysis_folder"], "predictions"),
-                                                   pred_formula_cache_folder_path=self.kwargs["pred_formula_cache_folder_path"],
-                                                   pred_save_matplotlib_plot_of_isotopologues=self.kwargs["oa_molecular_ion_pred_save_matplotlib_plot_of_isotopologues"],
-                                                   pred_save_xic_plot=self.kwargs["oa_molecular_ion_pred_save_xic_plot"],
-                                                   log_level = self.kwargs["log_level"],
-                                                   pred_return_if_no_peak_is_found=self.kwargs["oa_molecular_ion_only_calc_prediction_if_molecular_ion_peak_is_found"],
-                                                   **additional_kwargs)
-        self.make_oa_log_entry("vvvINFO:\t" + "Finished first prediction of molecular ion...")
+        try:
+            self.molecular_ion_prediction = class_Prediction.Prediction(self.ms_file, self.mass, best_molecular_ion_spec, spec_before=self.mi_spec_before, spec_after=self.mi_spec_after,
+                                                    absolute_pred_folder=os.path.join(self.kwargs["one_analysis_folder"], "predictions"),
+                                                    pred_formula_cache_folder_path=self.kwargs["pred_formula_cache_folder_path"],
+                                                    pred_save_matplotlib_plot_of_isotopologues=self.kwargs["oa_molecular_ion_pred_save_matplotlib_plot_of_isotopologues"],
+                                                    pred_save_xic_plot=self.kwargs["oa_molecular_ion_pred_save_xic_plot"],
+                                                    log_level = self.kwargs["log_level"],
+                                                    pred_return_if_no_peak_is_found=self.kwargs["oa_molecular_ion_only_calc_prediction_if_molecular_ion_peak_is_found"],
+                                                    **additional_kwargs)
+            self.make_oa_log_entry("vvvINFO:\t" + "Finished first prediction of molecular ion...")
+        except Exception as e:
+            self.make_oa_log_entry("ERROR:\t" + "Error during prediction of molecular ion in UVenture.py: " + str(e))
         #the object that is returned, has a bool variable self.peak_found = False if no peak was found or =True if a peak was found
         available_specs.append(best_molecular_ion_spec)
         #try to get the two full scan spectra next to the provided spectrum
@@ -648,14 +651,17 @@ class OneAnalysis:
                 except KeyError:
                     continue
             for curr_spec in available_specs:
-                class_Prediction.Prediction(self.ms_file, self.mass, curr_spec,
-                                    absolute_pred_folder=os.path.join(self.kwargs["one_analysis_folder"], "predictions"),
-                                    pred_formula_cache_folder_path=self.kwargs["pred_formula_cache_folder_path"],
-                                    pred_save_matplotlib_plot_of_isotopologues=self.kwargs["oa_molecular_ion_pred_save_matplotlib_plot_of_isotopologues"],
-                                    pred_save_xic_plot=self.kwargs["oa_molecular_ion_pred_save_xic_plot"],
-                                    log_level=self.kwargs["log_level"],
-                                    pred_return_if_no_peak_is_found=self.kwargs["oa_molecular_ion_only_calc_prediction_if_molecular_ion_peak_is_found"],
-                                    **additional_kwargs)
+                try:
+                    class_Prediction.Prediction(self.ms_file, self.mass, curr_spec,
+                                        absolute_pred_folder=os.path.join(self.kwargs["one_analysis_folder"], "predictions"),
+                                        pred_formula_cache_folder_path=self.kwargs["pred_formula_cache_folder_path"],
+                                        pred_save_matplotlib_plot_of_isotopologues=self.kwargs["oa_molecular_ion_pred_save_matplotlib_plot_of_isotopologues"],
+                                        pred_save_xic_plot=self.kwargs["oa_molecular_ion_pred_save_xic_plot"],
+                                        log_level=self.kwargs["log_level"],
+                                        pred_return_if_no_peak_is_found=self.kwargs["oa_molecular_ion_only_calc_prediction_if_molecular_ion_peak_is_found"],
+                                        **additional_kwargs)
+                except Exception as e_prediction:
+                    self.make_oa_log_entry("ERROR:\t" + "Error in prediction of molecular ion with available specs: " + str(e_prediction))
             self.make_oa_log_entry("vvINFO:\t" + "Old prediction did not match with the prediction of multiple spectra!")
             self.make_oa_log_entry("vvvINFO:\t" + "Plots are created for every spectrum next to the original index. Plots will be available.")
             with open(os.path.join(self.kwargs["one_analysis_folder"], "predictions", "BEST_FORMULA_" + str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.summarized_molecular_ion_formula_score_dict.keys())[0]).items()])) + ".txt"), "a") as txt_file:
@@ -693,7 +699,7 @@ class OneAnalysis:
             self.molecular_ion_prediction.make_op_log_entry("ERROR:\t" + "No formula found!")
             print("Error in getting best molecular ion prediction: " + str(e))
             self.make_oa_log_entry("ERROR:\tError in getting best molecular ion prediction: " + str(e))
-            if e == "list index out of range":
+            if "list index out of range" in e:
                 print("No formula found! So no best formula prediction could be chosen!")
                 self.make_oa_log_entry("ERROR:\tNo formula found! So no best formula prediction could be chosen!")
         self.molecular_ion_prediction.make_op_log_entry("vvINFO:\t" + "Formula predicted with " + str(len(available_specs)) + " spectra.")

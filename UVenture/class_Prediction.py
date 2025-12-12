@@ -200,14 +200,20 @@ class Prediction:
             self.make_op_log_entry("vvvINFO:\t" + "Start saving XIC plot...")
             self.xic_plot_filepath = os.path.join(self.kwargs["pred_folder"], "xic_" + str(round(self.mass, 4)) + "+-" + str(self.kwargs["mass_deviation"]) + "_" + str(self.spec.filter_mode) + ".png")
             title = "XIC for mass: " + str(round(self.mass, 4)) + " at RT: " + str(round(self.spec.rt, 2)) + " seconds\nFilter mode: " + str(self.spec.filter_mode)
-            plotting.create_xic(self.xic[0], self.xic[1], title, self.xic_plot_filepath, retention_time=self.spec.rt)
+            try:
+                plotting.create_xic(self.xic[0], self.xic[1], title, self.xic_plot_filepath, retention_time=self.spec.rt)
+            except Exception as exception_plotting_xic:
+                self.make_op_log_entry("ERROR:\t" + "Problem with plotting of XIC in class_Prediction.py: " + str(exception_plotting_xic))
             self.make_op_log_entry("vvvINFO:\t" + "Finished saving XIC plot...")
         
         # If the user wants to save the matplotlib plot of isotopologues, create it and save it
         if self.kwargs["pred_save_matplotlib_plot_of_isotopologues"] == True and len(list(self.formula_score_dict.keys())) > 0:
             self.make_op_log_entry("vvvINFO:\t" + "Start saving matplotlib plot of isotopologues...")
             self.matplotlib_plot_filepath = os.path.join(self.kwargs["pred_folder"], "isotopo_matplotlib_plot_" + str(round(self.mass, 4)) + "_" + str("".join([str(a) + str(n) for a, n in ast.literal_eval(list(self.formula_score_dict.keys())[0]).items()])) + ".png")
-            plotting.create_isotopo_plot(self.spec.summarized_masses, self.spec.summarized_intensities, ast.literal_eval(list(self.formula_score_dict.keys())[0]), self.matplotlib_plot_filepath)
+            try:
+                plotting.create_isotopo_plot(self.spec.summarized_masses, self.spec.summarized_intensities, ast.literal_eval(list(self.formula_score_dict.keys())[0]), self.matplotlib_plot_filepath)
+            except Exception as exception_plotting:
+                self.make_op_log_entry("ERROR:\t" + "Problem with plotting in class_Prediction.py: " + str(exception_plotting))
             self.make_op_log_entry("vvvINFO:\t" + "Finished saving matplotlib plot of isotopologues...")
         
         try:

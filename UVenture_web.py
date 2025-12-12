@@ -37,11 +37,20 @@ def caller_func(ms_filepath, mz, rt, settings_dict, parentfolder_msfile):
         rt_window_to_keep = 100
         ms_file.trunct_ms_file(rt-(rt_window_to_keep/2), rt+(rt_window_to_keep/2))
         myanalysis = UVenture.OneAnalysis(ms_file, mz, rt, **settings_dict)
+        log_processstart_func("Process started. Returning now!", log_filepath_obj=os.path.join(resource_path("log/"), "process_start.log"))
         return
     except Exception as e:
         print(e)
         print(traceback.format_exc())
+        log_processstart_func("ERROR during process start: " + str(e), log_filepath_obj=os.path.join(resource_path("log/"), "process_start.log"))
         return
+
+def log_processstart_func(message, log_filepath_obj):
+    with open(log_filepath_obj, "a") as f:
+        f.write(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")) + "\t")
+        f.write(str(message))
+        f.write("\n")
+
 
 def start_pd_process(ms_filepath, parentfolder, peaklist_filename, mzrt_filename, settings_dict):
     threshold_intensity = settings_dict["pred_minimum_assumed_noise"] * 4
@@ -1108,14 +1117,17 @@ class Webpage:
         rt = float(rt)
         thread_name = ("UVenture_OA_starttime_" + str(datetime.datetime.now().strftime("%Y%m%d:%H%M%S")) + "_MZ_" + str(mz) + "_RT_" + str(rt) + "_FILE_" + str( os.path.basename(ms_filepath) ) )
         print("Starting new process: " + thread_name)
-        proc = multiprocessing.Process(target=caller_func, args=[ms_filepath, mz, rt, settings_dict, parentfolder_msfile], name=thread_name)
-        proc.daemon = False
-        print("Process created: " + str(proc))
-        proc.start()
-        print("Process started: " + str(proc))
-        self.running_processes.append(proc)
-        print("Process added to running processes list")
-        self.update_running_processes()
+        try:
+            proc = multiprocessing.Process(target=caller_func, args=[ms_filepath, mz, rt, settings_dict, parentfolder_msfile], name=thread_name)
+            proc.daemon = False
+            print("Process created: " + str(proc))
+            proc.start()
+            print("Process started: " + str(proc))
+            self.running_processes.append(proc)
+            print("Process added to running processes list")
+            self.update_running_processes()
+        except Exception as e_processstart:
+            log_processstart_func("ERROR in start_one_oa: " + str(e_processstart), log_filepath_obj=os.path.join(resource_path("log/"), "process_start.log"))
 
     def add_webserver_log_entry(self, log_entry):
         with open(self.webserver_log_filepath, "a") as f:
