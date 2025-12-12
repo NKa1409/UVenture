@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 import ast
 import base64
 import copy
@@ -21,7 +24,7 @@ import matplotlib
 matplotlib.use('Agg')
 import werkzeug
 import multiprocessing
-from __future__ import annotations
+
 
 import tempfile
 from contextlib import contextmanager
